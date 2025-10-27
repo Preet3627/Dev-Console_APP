@@ -1,5 +1,5 @@
-import { getSecureItem } from "./utils/secureLocalStorage";
-import { AppSettings } from "./types";
+import { getSecureItem } from "@/utils/secureLocalStorage";
+import { AppSettings } from "@/types";
 
 // Add a global declaration for 'window.google' to inform TypeScript.
 declare global {

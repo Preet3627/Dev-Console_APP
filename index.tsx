@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 // FIX: Corrected the import path for App.tsx to be a relative path './App' to resolve the module loading error.
-import App from './App';
+import App from '@/App';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
