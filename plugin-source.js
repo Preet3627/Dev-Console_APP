@@ -56,12 +56,12 @@ export const pluginSourceCode = [
   '            update_option(DC_API_KEY_OPTION, wp_generate_password(64, false, false));',
   '        }',
   '        if (!get_option(DC_CORS_SETTINGS_OPTION)) { add_option(DC_CORS_SETTINGS_OPTION, [\'allow_all\' => false, \'allowed_origins\' => \'dev.ponsrischool.in\']); }',
-  '    },',
+  '    }',
   '',
   '    public static function activate() {',
   '        // This hook is intentionally left minimal to prevent fatal errors on activation.',
   '        // Option creation is handled on the `plugins_loaded` hook.',
-  '    },',
+  '    }',
   '',
   '    public function add_admin_menu() {',
   '        add_menu_page(\'Dev-Console Connector\', \'Connector\', \'manage_options\', \'dev-console-connector\', [$this, \'create_settings_page_html\'], \'dashicons-admin-plugins\');',
@@ -628,4 +628,4 @@ export const pluginSourceCode = [
   '',
   '// Initialize the plugin.',
   'Dev_Console_Connector::get_instance();',
-].join('\n');
+].join('\\n');
