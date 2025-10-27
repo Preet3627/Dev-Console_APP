@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { PM_SHRI_Logo } from './icons/Icons';
-import { registerUser } from '../services/wordpressService';
-
+import { PM_SHRI_Logo, GoogleIcon } from './icons/Icons';
+import { registerUser, signInWithGoogle } from '../services/wordpressService';
+import { triggerSignIn } from '../services/googleAuthService';
+import { AppSettings, SiteData } from '../types';
 
 interface SignUpProps {
     onBackToLogin: () => void;
     onNavigateToVerification: (email: string) => void;
+    onLogin: (userData: { email: string; token: string; isAdmin: boolean; settings: AppSettings, siteData?: SiteData | null, displayName?: string, profilePictureUrl?: string | null }) => void;
 }
 
-const SignUp: React.FC<SignUpProps> = ({ onBackToLogin, onNavigateToVerification }) => {
+const SignUp: React.FC<SignUpProps> = ({ onBackToLogin, onNavigateToVerification, onLogin }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,11 +33,28 @@ const SignUp: React.FC<SignUpProps> = ({ onBackToLogin, onNavigateToVerification
         
         setIsLoading(true);
         try {
-            await registerUser(email, password);
+            const response = await registerUser(email, password);
             // On success, navigate to verification. The backend will handle sending the email.
-            onNavigateToVerification(email);
+            // The backend now also handles cases where the user exists but isn't verified.
+            if (response.success) {
+                 onNavigateToVerification(email);
+            }
         } catch (err) {
             setError((err as Error).message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const handleGoogleSignUp = async () => {
+        setError('');
+        setIsLoading(true);
+        try {
+            const googleToken = await triggerSignIn();
+            const userData = await signInWithGoogle(googleToken);
+            onLogin(userData); // This will log the user in and switch the view
+        } catch (err) {
+            setError(typeof err === 'string' ? err : (err as Error).message);
         } finally {
             setIsLoading(false);
         }
@@ -65,7 +84,21 @@ const SignUp: React.FC<SignUpProps> = ({ onBackToLogin, onNavigateToVerification
                     </div>
                     <div className="pt-2">
                         <button type="submit" disabled={isLoading} className="w-full btn btn-primary">
-                            {isLoading ? 'Creating Account...' : 'Sign Up'}
+                            {isLoading ? 'Creating Account...' : 'Sign Up with Email'}
+                        </button>
+                    </div>
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-border"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="px-2 bg-background-secondary text-text-secondary">Or</span>
+                        </div>
+                    </div>
+                     <div>
+                        <button type="button" onClick={handleGoogleSignUp} disabled={isLoading} className="w-full btn btn-secondary flex items-center justify-center">
+                            <GoogleIcon className="w-5 h-5 mr-3" />
+                            {isLoading ? 'Processing...' : 'Sign up with Google'}
                         </button>
                     </div>
                 </form>

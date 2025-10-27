@@ -360,7 +360,7 @@ const App: React.FC = () => {
     if (!isLoggedIn) {
         switch (authView) {
             case 'signup':
-                return <SignUp onBackToLogin={() => setAuthView('login')} onNavigateToVerification={handleNavigateToVerification} />;
+                return <SignUp onBackToLogin={() => setAuthView('login')} onNavigateToVerification={handleNavigateToVerification} onLogin={handleLogin} />;
             case 'verify':
                 return <Verification email={verificationEmail} onVerificationSuccess={() => setAuthView('login')} onBackToLogin={() => setAuthView('login')} />;
             case 'forgot_password':

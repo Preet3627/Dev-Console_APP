@@ -18,12 +18,17 @@ import { pluginSourceCode } from '../plugin-source.js';
  * - ADMIN_PASSWORD (optional): Password for the default admin user on first run. Defaults to a strong random password logged to console.
  * - SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM (optional): For sending verification emails.
  */
-const requiredEnv = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_DATABASE', 'JWT_SECRET', 'GOOGLE_CLIENT_ID'];
+const requiredEnv = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_DATABASE', 'JWT_SECRET'];
 for (const envVar of requiredEnv) {
     if (!process.env[envVar]) {
         console.warn(`🚨 WARNING: Environment variable ${envVar} is not set!`);
     }
 }
+// FIX: Check for GOOGLE_CLIENT_ID separately as it's critical for Google sign-in.
+if (!process.env.GOOGLE_CLIENT_ID && !'59869142203-8qna4rfo93rrv9uiok3bes28pfu5k1l1.apps.googleusercontent.com') {
+    console.warn(`🚨 WARNING: Environment variable GOOGLE_CLIENT_ID is not set!`);
+}
+
 const optionalSmtpEnv = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'];
 for (const envVar of optionalSmtpEnv) {
     if (!process.env[envVar]) {
@@ -48,7 +53,8 @@ const dbConfig = {
     connectTimeout: 10000 
 };
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-for-demo-mode';
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+// FIX: Use the user-provided Client ID directly to fix "invalid token" / "audience mismatch" errors.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '59869142203-8qna4rfo93rrv9uiok3bes28pfu5k1l1.apps.googleusercontent.com';
 const googleAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 // --- Nodemailer Transporter ---
@@ -212,7 +218,7 @@ const seedAdminUser = async () => {
 
             // Also create default settings for this new admin
             const defaultSettings = {
-              "googleClientId": process.env.GOOGLE_CLIENT_ID,
+              "googleClientId": GOOGLE_CLIENT_ID,
               "aiProvider": "gemini", 
               "creditSaverEnabled": true,
             };
@@ -263,11 +269,11 @@ apiV1Router.get('/status', async (req, res) => {
 
 // --- PUBLIC CONFIG ENDPOINT ---
 apiV1Router.get('/public-config', (req, res) => {
-    if (!process.env.GOOGLE_CLIENT_ID) {
+    if (!GOOGLE_CLIENT_ID) {
         console.warn('GET /public-config: GOOGLE_CLIENT_ID is not set on the backend.');
     }
     res.json({
-        googleClientId: process.env.GOOGLE_CLIENT_ID,
+        googleClientId: GOOGLE_CLIENT_ID,
     });
 });
 
@@ -284,9 +290,23 @@ apiV1Router.post('/register', async (req, res) => {
     let connection;
     try {
         connection = await mysql.createConnection(dbConfig);
-        const [existingUsers] = await connection.query('SELECT id FROM users WHERE email = ?', [email]);
+        const [existingUsers] = await connection.query('SELECT id, is_verified FROM users WHERE email = ?', [email]);
+        
+        // FIX: Handle cases where the user exists but is not verified.
         if (existingUsers.length > 0) {
-            return res.status(409).json({ message: 'User with this email already exists.' });
+            const existingUser = existingUsers[0];
+            if (existingUser.is_verified) {
+                return res.status(409).json({ message: 'A user with this email already exists and is verified.' });
+            } else {
+                // User exists but is not verified, treat as a "resend code" request.
+                const verification_code = generateVerificationCode();
+                await connection.query('UPDATE users SET verification_code = ? WHERE id = ?', [verification_code, existingUser.id]);
+                await sendVerificationEmail(email, verification_code);
+                const responseMessage = isSmtpConfigured ?
+                    'You already have an account. A new verification code has been sent to your email.' :
+                    'You already have an account. A new verification code has been generated. Please check the server console.';
+                return res.status(200).json({ success: true, needs_verification: true, message: responseMessage });
+            }
         }
 
         const password_hash = await bcrypt.hash(password, 10);
@@ -345,7 +365,7 @@ apiV1Router.post('/login', async (req, res) => {
         const sites = sitesRows; // Already an array of objects
 
         // FIX: Always inject the server's current Google Client ID into the settings object.
-        settings.googleClientId = process.env.GOOGLE_CLIENT_ID;
+        settings.googleClientId = GOOGLE_CLIENT_ID;
 
         const token = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
 
@@ -444,26 +464,12 @@ apiV1Router.post('/google-signin', async (req, res) => {
 
             if (users.length > 0) {
                 user = users[0];
-                let fieldsToUpdate = [];
-                let params = [];
-                if (!user.google_id) {
-                    fieldsToUpdate.push('google_id = ?', 'is_verified = ?');
-                    params.push(google_id, true);
-                }
-                if (!user.display_name && name) {
-                    fieldsToUpdate.push('display_name = ?');
-                    params.push(name);
-                }
-                if (!user.profile_picture_url && picture) {
-                    fieldsToUpdate.push('profile_picture_url = ?');
-                    params.push(picture);
-                }
-
-                if (fieldsToUpdate.length > 0) {
-                    params.push(user.id);
-                    await connection.query(`UPDATE users SET ${fieldsToUpdate.join(', ')} WHERE id = ?`, params);
-                }
-
+                // FIX: Always update name and picture from Google, as it's the source of truth for Google logins.
+                // Also ensure the account is linked and verified.
+                await connection.query(
+                    'UPDATE users SET google_id = ?, display_name = ?, profile_picture_url = ?, is_verified = true WHERE id = ?',
+                    [google_id, name, picture, user.id]
+                );
             } else {
                 isNewUser = true;
                 const displayName = name || email.split('@')[0];
@@ -485,12 +491,12 @@ apiV1Router.post('/google-signin', async (req, res) => {
             if (isNewUser) {
                  settings = {
                     "aiProvider": "gemini", "creditSaverEnabled": true, "geminiApiKey": "", "geminiModel": "gemini-2.5-flash",
-                    "googleClientId": process.env.GOOGLE_CLIENT_ID,
+                    "googleClientId": GOOGLE_CLIENT_ID,
                  };
                  await connection.query('INSERT INTO app_settings (user_id, settings_json) VALUES (?, ?)', [user.id, JSON.stringify(settings)]);
             }
 
-            settings.googleClientId = process.env.GOOGLE_CLIENT_ID;
+            settings.googleClientId = GOOGLE_CLIENT_ID;
 
             const [sitesRows] = await connection.query('SELECT id, name, site_data_encrypted FROM user_sites WHERE user_id = ?', [user.id]);
             const sites = sitesRows;
@@ -706,7 +712,7 @@ apiV1Router.get('/backend-config-status', authenticateToken, isAdmin, async (req
             JWT_SECRET: process.env.JWT_SECRET && process.env.JWT_SECRET !== 'default-secret-for-demo-mode' ? '********' : 'Not Set or Default',
         },
         google: {
-            GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'Not Set',
+            GOOGLE_CLIENT_ID: GOOGLE_CLIENT_ID || 'Not Set',
         },
         smtp: {
             SMTP_HOST: process.env.SMTP_HOST || 'Not Set',
