@@ -54,7 +54,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToSignUp, onNavigateTo
 
     return (
         <div className="flex items-center justify-center h-screen login-gradient-bg">
-            <div className="w-full max-w-md p-8 space-y-8 glass-card">
+            <div className="w-full max-w-sm p-8 space-y-6 glass-card">
                 <div className="text-center">
                     <PM_SHRI_Logo className="w-24 h-24 mx-auto mb-4" />
                     <h1 className="text-3xl font-bold text-text-primary tracking-wider">Dev-Console</h1>

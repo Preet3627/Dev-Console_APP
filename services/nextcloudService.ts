@@ -20,12 +20,13 @@ export const verifyConnection = async (): Promise<boolean> => {
 
 /**
  * Uploads a file to Nextcloud by proxying through the master plugin.
+ * @param siteUrl The URL of the site being backed up, for folder organization.
  * @param fileName The name of the file to upload.
  * @param base64Content The base64-encoded content of the file.
  */
-export const uploadFileToNextcloud = async (fileName: string, base64Content: string): Promise<boolean> => {
+export const uploadFileToNextcloud = async (siteUrl: string, fileName: string, base64Content: string): Promise<boolean> => {
     try {
-        const response = await proxyNextcloudRequest('upload_backup', { fileName, content: base64Content });
+        const response = await proxyNextcloudRequest('upload_backup', { siteUrl, fileName, content: base64Content });
          if (!response.success) {
             console.error("Nextcloud upload failed on backend:", response.details);
             throw new Error(response.details || 'Nextcloud upload failed.');

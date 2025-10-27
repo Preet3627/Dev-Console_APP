@@ -24,6 +24,7 @@ import AdminPanel from './components/AdminPanel';
 import CoPilotView from './components/CoPilotView';
 import DatabaseSetup from './components/DatabaseSetup';
 import BackendStatusView from './components/BackendStatusView';
+import LandingPage from './LandingPage';
 
 import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';
 import { getEncryptedSiteData, testConnection, getBackendStatus, getPublicConfig } from './services/wordpressService';
@@ -34,8 +35,10 @@ export type View = 'dashboard' | 'plugins' | 'themes' | 'database' | 'generator'
 type AuthView = 'login' | 'signup' | 'verify' | 'forgot_password';
 type Toast = { message: string; type: 'success' | 'error' };
 export type AppStatus = 'loading' | 'needs_setup' | 'setup_error' | 'ready';
+type AppView = 'landing' | 'main_app';
 
 const App: React.FC = () => {
+    const [currentAppView, setCurrentAppView] = useState<AppView>('landing');
     const [authView, setAuthView] = useState<AuthView>('login');
     const [verificationEmail, setVerificationEmail] = useState('');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -127,6 +130,7 @@ const App: React.FC = () => {
         setSiteData(null);
         setCurrentView('dashboard');
         setAuthView('login');
+        setCurrentAppView('landing');
     };
 
     const loadSiteData = useCallback(async () => {
@@ -148,6 +152,9 @@ const App: React.FC = () => {
             await loadInitialConfig();
             await checkBackendStatus();
             const token = getSecureItem('authToken');
+            if (token) {
+              setCurrentAppView('main_app');
+            }
             const adminStatus = getSecureItem<boolean>('isAdmin');
             if (token) {
                 setIsLoggedIn(true);
@@ -206,6 +213,14 @@ const App: React.FC = () => {
             setToast({ message: `❌ Connection test failed: ${(error as Error).message}`, type: 'error' });
         }
     };
+    
+    const handleEnterApp = () => {
+        setCurrentAppView('main_app');
+    };
+
+    if (currentAppView === 'landing') {
+        return <LandingPage onEnterApp={handleEnterApp} />;
+    }
 
     const renderView = () => {
         if (!siteData && !['dashboard', 'settings', 'generator', 'adminPanel', 'backendStatus'].includes(currentView)) {
@@ -279,7 +294,7 @@ const App: React.FC = () => {
     }
     
     return (
-        <div className="flex h-screen bg-background text-text-primary font-sans">
+        <div className="flex h-screen bg-background text-text-primary font-sans main-app-fade-in">
             <Sidebar currentView={currentView} setView={setCurrentView} onLogout={handleLogout} isAdmin={isAdmin} />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <Header 
@@ -289,7 +304,7 @@ const App: React.FC = () => {
                     onRefresh={loadSiteData}
                     onTestConnection={handleTestConnection}
                 />
-                <main className="flex-1 overflow-y-auto p-8 animation-bg-pan">
+                <main className="flex-1 overflow-y-auto p-8">
                     {renderView()}
                 </main>
             </div>
@@ -302,7 +317,8 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {showConnectorModal && <ConnectorSetupModal onClose={() => setShowConnectorModal(false)} onConnect={handleConnect} />}
+            {/* FIX: Changed prop 'onConnect' to 'onSiteAdded' to match the component's definition and resolve a type error. */}
+            {showConnectorModal && <ConnectorSetupModal onClose={() => setShowConnectorModal(false)} onSiteAdded={handleConnect} />}
             {showCoPilotModal && <CoPilot onClose={() => setShowCoPilotModal(false)} siteData={siteData} initialPrompt={coPilotInitialPrompt} modalBgColor={modalBgColor} />}
             {showEditor && assetToEdit && <CodeEditor siteData={siteData!} asset={assetToEdit} initialFile={fileToEdit || undefined} onClose={() => setShowEditor(false)} modalBgColor={modalBgColor} />}
             {showPluginGenerator && <PluginGeneratorModal onClose={() => setShowPluginGenerator(false)} siteData={siteData} modalBgColor={modalBgColor} />}

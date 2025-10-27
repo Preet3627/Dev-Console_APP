@@ -50,7 +50,7 @@ const BackupRestore: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
             
             if (destination === 'nextcloud') {
                 setStatusText('Uploading to Nextcloud...');
-                await uploadFileToNextcloud(backupData.fileName, backupData.content);
+                await uploadFileToNextcloud(siteData.siteUrl, backupData.fileName, backupData.content);
             } else if (destination === 'googledrive') {
                  setStatusText('Uploading to Google Drive...');
                 const byteCharacters = atob(backupData.content);
@@ -58,7 +58,7 @@ const BackupRestore: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
                 for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: 'application/zip' });
-                await uploadToGoogleDrive(backupData.fileName, blob);
+                await uploadToGoogleDrive(siteData.siteUrl, backupData.fileName, blob);
             } else { // 'local'
                 setStatusText('Preparing download...');
                 const byteCharacters = atob(backupData.content);

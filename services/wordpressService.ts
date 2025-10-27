@@ -146,6 +146,14 @@ export const requestPasswordReset = async (email: string): Promise<{ message: st
     });
 };
 
+// FIX: Added the missing 'addSite' function to handle creating new site connections via the backend API.
+export const addSite = async (name: string, site_data_encrypted: string): Promise<{ id: number; name: string; site_data_encrypted: string; }> => {
+    return masterApiFetch('/sites', {
+        method: 'POST',
+        body: JSON.stringify({ name, site_data_encrypted }),
+    });
+};
+
 // --- Settings & Site Data ---
 export const saveAppSettings = async (settings: AppSettings): Promise<void> => {
     await masterApiFetch('/settings', {

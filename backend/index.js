@@ -142,12 +142,17 @@ const createTables = async (connection) => {
     `);
 
     await connection.query(`
-        CREATE TABLE IF NOT EXISTS site_data (
-            user_id INT PRIMARY KEY,
-            site_data_encrypted TEXT,
+        CREATE TABLE IF NOT EXISTS user_sites (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            site_data_encrypted TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
     `);
+
+    // Drop the old single-site table if it exists
+    await connection.query('DROP TABLE IF EXISTS site_data;');
 };
 
 
@@ -331,18 +336,17 @@ apiV1Router.post('/login', async (req, res) => {
         if (!isMatch) return res.status(401).json({ message: 'Invalid credentials.' });
 
         const [settingsRows] = await connection.query('SELECT settings_json FROM app_settings WHERE user_id = ?', [user.id]);
-        const [siteDataRows] = await connection.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [user.id]);
+        const [sitesRows] = await connection.query('SELECT id, name, site_data_encrypted FROM user_sites WHERE user_id = ?', [user.id]);
 
         const settings = settingsRows.length > 0 ? JSON.parse(settingsRows[0].settings_json) : {};
-        const siteData = siteDataRows.length > 0 ? siteDataRows[0].site_data_encrypted : null;
+        const sites = sitesRows; // Already an array of objects
 
         // FIX: Always inject the server's current Google Client ID into the settings object.
-        // This ensures that the frontend has the correct ID even if it wasn't set when the user was created.
         settings.googleClientId = process.env.GOOGLE_CLIENT_ID;
 
         const token = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
 
-        res.json({ token, email: user.email, isAdmin: !!user.is_admin, settings, siteData });
+        res.json({ token, email: user.email, isAdmin: !!user.is_admin, settings, sites });
 
     } catch (error) {
         console.error('Login error:', error);
@@ -456,13 +460,13 @@ apiV1Router.post('/google-signin', async (req, res) => {
             // FIX: Always inject the server's current Google Client ID into the settings object.
             settings.googleClientId = process.env.GOOGLE_CLIENT_ID;
 
-            const [siteDataRows] = await connection.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [user.id]);
-            const siteData = siteDataRows.length > 0 ? siteDataRows[0].site_data_encrypted : null;
+            const [sitesRows] = await connection.query('SELECT id, name, site_data_encrypted FROM user_sites WHERE user_id = ?', [user.id]);
+            const sites = sitesRows;
             
             await connection.commit();
             
             const jwtToken = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
-            res.json({ token: jwtToken, email: user.email, isAdmin: !!user.is_admin, settings, siteData });
+            res.json({ token: jwtToken, email: user.email, isAdmin: !!user.is_admin, settings, sites });
         } catch (innerError) {
             await connection.rollback();
             throw innerError;
@@ -477,34 +481,49 @@ apiV1Router.post('/google-signin', async (req, res) => {
 
 
 // SETTINGS & SITE DATA
-apiV1Router.get('/site-data', authenticateToken, async (req, res) => {
-    if (!isDbConfigured) return res.status(204).send();
+apiV1Router.get('/sites', authenticateToken, async (req, res) => {
+    if (!isDbConfigured) return res.json([]);
     let connection;
     try {
         connection = await mysql.createConnection(dbConfig);
-        const [rows] = await connection.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [req.user.id]);
-        if (rows.length === 0) return res.status(204).send();
-        res.json({ data: rows[0].site_data_encrypted });
+        const [rows] = await connection.query('SELECT id, name, site_data_encrypted FROM user_sites WHERE user_id = ?', [req.user.id]);
+        res.json(rows);
     } catch (error) {
-        res.status(500).json({ message: 'Failed to fetch site data.' });
+        res.status(500).json({ message: 'Failed to fetch sites.' });
     } finally {
         if (connection) await connection.end();
     }
 });
 
-apiV1Router.post('/site-data', authenticateToken, async (req, res) => {
-    if (!isDbConfigured) return res.sendStatus(204);
-    const { data } = req.body;
+apiV1Router.post('/sites', authenticateToken, async (req, res) => {
+    if (!isDbConfigured) return res.status(503).json({ message: 'Database not configured.' });
+    const { name, site_data_encrypted } = req.body;
     let connection;
     try {
         connection = await mysql.createConnection(dbConfig);
-        await connection.query(
-            'INSERT INTO site_data (user_id, site_data_encrypted) VALUES (?, ?) ON DUPLICATE KEY UPDATE site_data_encrypted = ?',
-            [req.user.id, data, data]
+        const [result] = await connection.query(
+            'INSERT INTO user_sites (user_id, name, site_data_encrypted) VALUES (?, ?, ?)',
+            [req.user.id, name, site_data_encrypted]
         );
+        res.status(201).json({ id: result.insertId, name, site_data_encrypted });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to save site.' });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
+
+apiV1Router.delete('/sites/:id', authenticateToken, async (req, res) => {
+    if (!isDbConfigured) return res.sendStatus(204);
+    const { id } = req.params;
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        // Ensure user can only delete their own sites
+        await connection.query('DELETE FROM user_sites WHERE id = ? AND user_id = ?', [id, req.user.id]);
         res.sendStatus(204);
     } catch (error) {
-        res.status(500).json({ message: 'Failed to save site data.' });
+        res.status(500).json({ message: 'Failed to delete site.' });
     } finally {
         if (connection) await connection.end();
     }
@@ -672,32 +691,35 @@ apiV1Router.post('/nextcloud', authenticateToken, async (req, res) => {
             }
 
         } else if (action === 'upload_backup') {
-            const { fileName, content } = payload; // content is base64
-            if (!fileName || !content) {
-                return res.status(400).json({ success: false, details: 'Missing fileName or content for upload.' });
+            const { siteUrl, fileName, content } = payload; // content is base64
+            if (!fileName || !content || !siteUrl) {
+                return res.status(400).json({ success: false, details: 'Missing fileName, content, or siteUrl for upload.' });
             }
 
             const buffer = Buffer.from(content, 'base64');
-            const path = backupPath || 'dev-console-backups';
-            
-            const dirCheckResponse = await fetch(`${davUrl}/${path}`, {
-                 method: 'PROPFIND',
-                 headers: { 'Authorization': authHeader, 'Depth': '0' },
-            });
+            const rootBackupPath = backupPath || 'dev-console-backups';
+            const siteFolderName = siteUrl.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9.-]/g, '_');
+            const fullPath = `${rootBackupPath}/${siteFolderName}`;
 
-            if (dirCheckResponse.status === 404) {
-                const mkcolResponse = await fetch(`${davUrl}/${path}`, {
-                    method: 'MKCOL',
-                    headers: { 'Authorization': authHeader },
-                });
-                if (mkcolResponse.status !== 201 && mkcolResponse.status !== 405) { // 201 Created, 405 Method Not Allowed (if exists)
-                     return res.status(mkcolResponse.status).json({ success: false, details: `Failed to create backup directory '${path}'. Status: ${mkcolResponse.status}` });
+            // Check/create root backup directory
+            const rootDirCheck = await fetch(`${davUrl}/${rootBackupPath}`, { method: 'PROPFIND', headers: { 'Authorization': authHeader, 'Depth': '0' } });
+            if (rootDirCheck.status === 404) {
+                const mkcolResponse = await fetch(`${davUrl}/${rootBackupPath}`, { method: 'MKCOL', headers: { 'Authorization': authHeader } });
+                if (mkcolResponse.status !== 201 && mkcolResponse.status !== 405) {
+                    return res.status(mkcolResponse.status).json({ success: false, details: `Failed to create root backup directory '${rootBackupPath}'. Status: ${mkcolResponse.status}` });
                 }
-            } else if (dirCheckResponse.status !== 207) {
-                 return res.status(dirCheckResponse.status).json({ success: false, details: `Error checking backup directory. Status: ${dirCheckResponse.status}` });
+            }
+            
+            // Check/create site-specific directory
+            const siteDirCheck = await fetch(`${davUrl}/${fullPath}`, { method: 'PROPFIND', headers: { 'Authorization': authHeader, 'Depth': '0' } });
+            if (siteDirCheck.status === 404) {
+                const mkcolResponse = await fetch(`${davUrl}/${fullPath}`, { method: 'MKCOL', headers: { 'Authorization': authHeader } });
+                if (mkcolResponse.status !== 201 && mkcolResponse.status !== 405) {
+                    return res.status(mkcolResponse.status).json({ success: false, details: `Failed to create site backup directory '${fullPath}'. Status: ${mkcolResponse.status}` });
+                }
             }
 
-            const uploadResponse = await fetch(`${davUrl}/${path}/${fileName}`, {
+            const uploadResponse = await fetch(`${davUrl}/${fullPath}/${fileName}`, {
                 method: 'PUT',
                 headers: { 'Authorization': authHeader },
                 body: buffer,

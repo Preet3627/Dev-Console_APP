@@ -10,7 +10,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ isConnected, siteUrl, onConnect, onRefresh }) => {
     return (
-        <header className="bg-background/80 backdrop-blur-sm border-b border-border p-4 flex justify-between items-center flex-shrink-0">
+        <header className="border-b border-border p-4 flex justify-between items-center flex-shrink-0">
             <div className="flex items-center space-x-3">
                 <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-accent-green' : 'bg-accent-red'}`}></div>
                 <span className="text-sm font-semibold">{isConnected ? `Connected: ${siteUrl}` : 'Not Connected'}</span>

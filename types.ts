@@ -1,4 +1,6 @@
 export interface SiteData {
+    id: number;
+    name: string;
     siteUrl: string;
     connectorKey: string;
     apiKey: string;

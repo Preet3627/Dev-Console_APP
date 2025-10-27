@@ -74,7 +74,7 @@ const FileHistoryModal: React.FC<FileHistoryModalProps> = ({ siteData, asset, fi
 
     return (
         <div className="fixed inset-0 bg-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-background-secondary rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] border border-border-primary flex flex-col p-6">
+            <div className="bg-background-secondary rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] border border-border-primary flex flex-col p-6 modal-content-animation">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold flex items-center">
                         <HistoryIcon className="w-6 h-6 mr-3 text-accent-blue" />

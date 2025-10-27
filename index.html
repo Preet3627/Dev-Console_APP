@@ -8,9 +8,192 @@
     <link rel="stylesheet" href="./index.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Roboto+Mono&display=swap" rel="stylesheet">
     <link rel="manifest" href="/manifest.json">
+    
+    <!-- Added for landing page syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+      /* --- Start of Embedded Landing Page Styles --- */
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body.landing-body {
+          height: auto;
+          width: 100%;
+          overflow-x: hidden;
+          overflow-y: auto;
+          background-color: #030712;
+          font-family: 'Inter', sans-serif;
+          color: #f9fafb;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          position: relative;
+          z-index: 0;
+      }
+
+      /* New Animated Gradient Background */
+       body.landing-body::before,
+       body.landing-body::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 200vw;
+        height: 200vh;
+        z-index: -1;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+        filter: blur(120px);
+        opacity: 0.3;
+        animation: aurora-pan 25s linear infinite;
+      }
+      
+      body.landing-body::before {
+        background-image: 
+          radial-gradient(circle at 20% 20%, #22d3ee, transparent 30%),
+          radial-gradient(circle at 80% 30%, #a78bfa, transparent 30%);
+      }
+
+      body.landing-body::after {
+        background-image: 
+          radial-gradient(circle at 50% 80%, #8b5cf6, transparent 30%);
+        animation-direction: reverse;
+        animation-duration: 30s;
+      }
+
+      
+      .landing-header {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        right: 1rem;
+        z-index: 50;
+        background-color: rgba(17, 24, 39, 0.4);
+        -webkit-backdrop-filter: blur(24px);
+        backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 9999px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        transition: all 0.3s ease-out;
+      }
+      
+      .wordpress-gradient-text {
+        background-image: linear-gradient(to right, #22d3ee, #a78bfa);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .btn-primary-landing {
+          border-radius: 9999px;
+          padding: 0.75rem 1.75rem;
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+          box-shadow: 0 0 15px 0px rgba(167, 139, 250, 0.3), 0 4px 6px -2px rgba(139, 92, 246, 0.1);
+          background-image: linear-gradient(to right, #22d3ee, #a78bfa, #8b5cf6);
+          background-size: 200% auto;
+          transition: all 0.5s ease-out;
+      }
+      .btn-primary-landing:hover {
+          background-position: right center;
+          transform: translateY(-2px);
+          box-shadow: 0 0 25px 0px rgba(167, 139, 250, 0.6);
+      }
+
+      .glass-card-landing {
+          background-color: rgba(17, 24, 39, 0.3);
+          -webkit-backdrop-filter: blur(32px);
+          backdrop-filter: blur(32px);
+          border-radius: 0.75rem;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+          transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease-out, border-color 0.4s ease;
+      }
+
+      .glass-card-landing:hover {
+          border-color: rgba(167, 139, 250, 0.5);
+      }
+      
+      .scroll-watcher {
+        height: 3px;
+        position: fixed;
+        top: 0;
+        z-index: 1000;
+        background-image: linear-gradient(to right, #22d3ee, #a78bfa);
+        scale: 0 1;
+        transform-origin: left;
+        animation: scroll-watcher linear;
+        animation-timeline: scroll();
+      }
+
+      .animate-on-scroll {
+          opacity: 0;
+          transition: opacity 0.8s cubic-bezier(0.165, 0.84, 0.44, 1), transform 0.8s cubic-bezier(0.165, 0.84, 0.44, 1);
+      }
+      .is-visible {
+          opacity: 1;
+          transform: none !important;
+      }
+
+      .fade-in-up { transform: translateY(40px); }
+      .zoom-in { transform: scale(0.9); }
+      
+      .hero-glow-text {
+        text-shadow: 0 0 8px rgba(249, 250, 251, 0.3), 0 0 20px rgba(167, 139, 250, 0.3);
+      }
+      
+      .font-extrabold { font-weight: 800; }
+      .leading-tight { line-height: 1.2; }
+      
+      .pt-48 { padding-top: 12rem; }
+      .pb-20 { padding-bottom: 5rem; }
+      .lg\\:pt-64 { @media (min-width: 1024px) { padding-top: 16rem; } }
+      .lg\\:pb-24 { @media (min-width: 1024px) { padding-bottom: 6rem; } }
+      .text-5xl { font-size: 3rem; }
+      .md\\:text-7xl { @media (min-width: 768px) { font-size: 4.5rem; } }
+      .text-lg { font-size: 1.125rem; }
+      .md\\:text-xl { @media (min-width: 768px) { font-size: 1.25rem; } }
+      .mb-10 { margin-bottom: 2.5rem; }
+      .py-48 { padding-top: 12rem; padding-bottom: 12rem; }
+      .lg\\:py-64 { @media (min-width: 1024px) { padding-top: 16rem; padding-bottom: 16rem; } }
+      .text-4xl { font-size: 2.25rem; }
+      .md\\:text-5xl { @media (min-width: 768px) { font-size: 3rem; } }
+      .py-20 { padding-top: 5rem; padding-bottom: 5rem; }
+      .lg\\:py-32 { @media (min-width: 1024px) { padding-top: 8rem; padding-bottom: 8rem; } }
+      .gap-8 { gap: 2rem; }
+      .md\\:grid-cols-2 { @media (min-width: 768px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+      @keyframes aurora-pan {
+        from { transform: rotate(0deg) translateX(-10%) translateY(-10%); }
+        to { transform: rotate(360deg) translateX(-10%) translateY(-10%); }
+      }
+
+      @keyframes scroll-watcher {
+        to { scale: 1 1; }
+      }
+      
+      @keyframes pulse-glow {
+          from { background-position: 0% 50%; }
+          to { background-position: 100% 50%; }
+      }
+      @keyframes move-particles {
+          from { transform: translate(0, 0); }
+          to { transform: translate(-200px, -200px); }
+      }
+      @keyframes float {
+        0% { transform: translatey(0px); }
+        50% { transform: translatey(-20px); }
+        100% { transform: translatey(0px); }
+      }
+      /* --- End of Embedded Landing Page Styles --- */
+    </style>
   <script type="importmap">
 {
   "imports": {
@@ -35,6 +218,7 @@
 </script>
 </head>
   <body>
+    <div class="scroll-watcher"></div>
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
   </body>

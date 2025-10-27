@@ -48,11 +48,6 @@ body {
     font-family: 'Sora', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-image:
-      linear-gradient(#374151 1px, transparent 1px),
-      linear-gradient(to right, #374151 1px, transparent 1px);
-    background-size: 40px 40px;
-    animation: bg-pan 8s linear infinite;
     overflow: hidden; /* Prevent body from scrolling */
 }
 
@@ -70,9 +65,9 @@ body {
 
 /* 3. Custom Components */
 .sidebar {
-    background-color: rgba(3, 7, 18, 0.8);
+    background-color: rgba(3, 7, 18, 0.6);
     border-right: 1px solid #374151;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(24px) saturate(120%);
 }
 
 .nav-item {
@@ -106,8 +101,8 @@ body {
 }
 
 .glass-card {
-    background-color: rgba(17, 24, 39, 0.5);
-    backdrop-filter: blur(16px);
+    background-color: rgba(17, 24, 39, 0.4);
+    backdrop-filter: blur(24px) saturate(120%);
     border: 1px solid #374151;
     border-radius: 12px;
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
@@ -175,7 +170,8 @@ body {
 }
 
 .bg-overlay {
-    background-color: rgba(3, 7, 18, 0.5); /* A semi-transparent dark background for modal overlays */
+    background-color: rgba(3, 7, 18, 0.3);
+    backdrop-filter: blur(8px) saturate(120%);
 }
 
 /* Toast Notification */
@@ -203,9 +199,13 @@ body {
 /* 4. Utilities */
 
 /* Keyframes */
-@keyframes bg-pan {
-    0% { background-position: 0% 0%; }
-    100% { background-position: 40px 40px; }
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .5; } }
@@ -222,6 +222,8 @@ body {
 /* Animations */
 .animate-spin { animation: spin 1s linear infinite; }
 .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.main-app-fade-in { animation: fade-in 0.5s ease-out; }
+.modal-content-animation { animation: scale-in 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
 
 /* Display, Layout, Sizing */
 .flex { display: flex; }
@@ -366,8 +368,8 @@ body {
 .border-border-primary { border-color: #374151; }
 .divide-border-primary > :not([hidden]) ~ :not([hidden]) { border-top-color: #374151; }
 .hover\\:bg-border-primary:hover { background-color: #374151; }
-.backdrop-blur-sm { backdrop-filter: blur(4px); }
-.backdrop-blur-lg { backdrop-filter: blur(16px); }
+.backdrop-blur-sm { backdrop-filter: blur(8px); }
+.backdrop-blur-lg { backdrop-filter: blur(24px); }
 
 /* Positioning & Z-Index */
 .fixed { position: fixed; }
