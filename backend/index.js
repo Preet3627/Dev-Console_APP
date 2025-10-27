@@ -602,9 +602,10 @@ apiV1Router.post('/profile', authenticateToken, async (req, res) => {
     let connection;
     try {
         connection = await mysql.createConnection(dbConfig);
+        // FIX: Coalesce an empty string for profilePictureUrl to NULL to handle cases where the user clears the field.
         await connection.query(
             'UPDATE users SET display_name = ?, profile_picture_url = ? WHERE id = ?',
-            [displayName, profilePictureUrl, req.user.id]
+            [displayName, profilePictureUrl || null, req.user.id]
         );
         res.json({ success: true, message: 'Profile updated successfully.' });
     } catch (error) {

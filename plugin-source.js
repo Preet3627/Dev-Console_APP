@@ -3,7 +3,7 @@ export const pluginSourceCode = [
   '/**',
   ' * Plugin Name: Dev-Console Connector',
   ' * Description: Securely connects your WordPress site to the Dev-Console Co-Pilot application.',
-  ' * Version: 2.5.0',
+  ' * Version: 2.5.1',
   ' * Author: PM-SHRI',
   ' * Author URI: https://ponsrischool.in',
   ' */',
