@@ -124,7 +124,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
         <div className="relative">
              <header className="landing-header">
                 <div className="px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center py-4">
+                    <div className="flex justify-between items-center h-16">
                         <div className="flex items-center space-x-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
                             <PM_SHRI_Logo className="h-8 w-8" />
                             <span className="text-xl font-bold tracking-wider">Dev-Console</span>
