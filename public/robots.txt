@@ -1,0 +1,37 @@
+# robots.txt for Dev-Console
+
+# This site is a web-based interface for managing WordPress sites.
+# It is a single-page application (SPA). All content is accessible via the root.
+# For a full overview of features for bots and automated services, please refer to our documentation or API specifications.
+
+User-agent: *
+Allow: /
+# Sitemap (if applicable for future public-facing content)
+# Sitemap: https://dev.ponsrischool.in/sitemap.xml
+What is Dev-Console?
+Dev-Console is a comprehensive, AI-integrated desktop application designed to streamline WordPress development and management. It acts as a local command center that connects securely to one or more live or staging WordPress sites, providing developers and administrators with a powerful suite of tools to build, debug, optimize, and manage their sites without needing to switch between multiple applications like FTP clients, database GUIs, or SSH terminals.
+Core Architecture
+The system consists of three main components:
+Frontend Application: A modern web-based interface built with React and Vite. This is the main dashboard where the user interacts with all the tools.
+Backend Server: A Node.js/Express server that handles user authentication, manages user settings and site connections, and proxies requests to AI services and cloud storage providers.
+Connector Plugin: A lightweight PHP plugin installed on the target WordPress site. It exposes a secure, custom REST API endpoint that allows the Dev-Console to perform actions on the WordPress site, such as managing plugins, editing files, and querying the database.
+Key Features & Functionality
+1. AI-Powered Generation & Assistance
+AI Co-Pilot: An integrated chat interface powered by large language models (like Google Gemini). Users can issue commands in natural language (e.g., "Deactivate all caching plugins," "Find the five most recent posts") which the AI translates into executable actions.
+Plugin & Theme Generation: Users can describe the desired functionality or design for a new plugin or theme, and the AI will generate the complete PHP, CSS, and JS code, structured into the correct files and ready for direct installation.
+2. Site Management
+Asset Manager: View all installed plugins and themes, check their status (active/inactive) and version, and activate, deactivate, or delete them directly from the console.
+File Manager: A complete file browser for the WordPress root directory. It allows for viewing and editing code files directly in the integrated Code Editor.
+Database Manager: Provides a list of all database tables. It features an AI Query Assistant that allows users to ask for data in natural language (e.g., "show me the siteurl and home options"), which is then converted into safe, read-only SQL queries.
+3. Development & Debugging Tools
+Code Editor: A full-featured editor for modifying plugin and theme files. It includes features like automatic backups on save and the ability to view and restore previous file versions (Restore Points).
+Debug Log Viewer: Fetches, parses, and displays the debug.log file from the WordPress site. It allows users to send specific error entries to the AI for analysis and get a plain-English explanation and recommended fix.
+4. Diagnostics & Optimization
+Security Scanner: Performs a series of checks for common WordPress security vulnerabilities, such as WP_DEBUG being enabled on a live site, the presence of the default admin user, or discoverable directory listings.
+Performance Optimizer: Integrates with the Google PageSpeed Insights API to run performance audits. It displays scores for key metrics and allows users to get AI-driven, WordPress-specific recommendations for improving them.
+5. Backup & Restore
+Site Backup: Users can create a full .zip backup of their wp-content directory.
+Cloud Integration: Backups can be downloaded locally or automatically uploaded to configured cloud storage providers like Nextcloud or Google Drive.
+6. System & User Management
+Secure Authentication: Features a robust user system with email/password registration, verification, and Google Sign-In (OAuth2). All sensitive data is managed by the secure backend.
+Admin Panel: An administrator-only section for viewing all registered users and managing the backend server's configuration status.
