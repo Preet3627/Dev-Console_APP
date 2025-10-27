@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { CloseIcon, ConnectIcon, DownloadIcon, CopyIcon } from './icons/Icons';
-import { pluginSourceCode } from '../plugin-source';
+import { pluginSourceCode } from '../plugin-source.js';
 import { SiteData } from '../types';
 import { addSite } from '../services/wordpressService';
 import { encryptData } from '../utils/secureLocalStorage';

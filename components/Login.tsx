@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { PM_SHRI_Logo, GoogleIcon } from './icons/Icons';
 import { loginUser, signInWithGoogle } from '../services/wordpressService';
@@ -5,7 +6,7 @@ import { triggerSignIn } from '../services/googleAuthService';
 import { AppSettings, SiteData } from '../types';
 
 interface LoginProps {
-    onLogin: (userData: { email: string, token: string, isAdmin: boolean, settings: AppSettings, siteData?: SiteData | null }) => void;
+    onLogin: (userData: { email: string; token: string; isAdmin: boolean; settings: AppSettings, sites: SiteData[], displayName?: string, profilePictureUrl?: string | null }) => void;
     onNavigateToSignUp: () => void;
     onNavigateToForgotPassword: () => void;
     onNavigateToVerification: (email: string) => void;

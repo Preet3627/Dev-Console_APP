@@ -1,4 +1,4 @@
-import { getSecureItem, setSecureItem } from "../utils/secureLocalStorage";
+import { getSecureItem, setSecureItem, removeSecureItem } from "../utils/secureLocalStorage";
 import { AppSettings } from "../types";
 
 declare global {
@@ -88,4 +88,11 @@ export const getGoogleApiToken = (scope: string): Promise<string> => {
         // Request a new token. This will trigger the consent pop-up if needed.
         tokenClient.requestAccessToken();
     });
+};
+
+/**
+ * Disconnects the app from Google Drive by removing the stored access token.
+ */
+export const disconnectGoogleDrive = (): void => {
+    removeSecureItem('googleDriveAccessToken');
 };

@@ -26,9 +26,10 @@ import CoPilotView from '@/components/CoPilotView';
 import DatabaseSetup from '@/components/DatabaseSetup';
 import BackendStatusView from '@/components/BackendStatusView';
 import LandingPage from '@/LandingPage';
+import SiteSwitcherModal from '@/components/SiteSwitcherModal';
 
 import { getSecureItem, setSecureItem, removeSecureItem } from '@/utils/secureLocalStorage';
-import { getEncryptedSiteData, testConnection, getBackendStatus, getPublicConfig, getLatestConnectorPlugin, updateConnectorPlugin } from '@/services/wordpressService';
+import { getAllSites, testConnection, getBackendStatus, getPublicConfig, getLatestConnectorPlugin, updateConnectorPlugin } from '@/services/wordpressService';
 import { SiteData, AppSettings, Asset, AssetFile, AssetType } from '@/types';
 import FloatingCoPilotButton from '@/components/FloatingCoPilotButton';
 
@@ -45,7 +46,12 @@ const App: React.FC = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [currentView, setCurrentView] = useState<View>('dashboard');
-    const [siteData, setSiteData] = useState<SiteData | null>(null);
+    
+    // Multi-site state
+    const [sites, setSites] = useState<SiteData[]>([]);
+    const [currentSite, setCurrentSite] = useState<SiteData | null>(null);
+    const [showSiteSwitcher, setShowSiteSwitcher] = useState(false);
+    
     const [showConnectorModal, setShowConnectorModal] = useState(false);
     const [showCoPilotModal, setShowCoPilotModal] = useState(false);
     const [coPilotInitialPrompt, setCoPilotInitialPrompt] = useState<string | undefined>(undefined);
@@ -62,7 +68,6 @@ const App: React.FC = () => {
     const [displayName, setDisplayName] = useState('');
     const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
 
-    // Connector update state moved to App level
     const [connectorVersion, setConnectorVersion] = useState<string | null>(null);
     const [latestConnectorVersion, setLatestConnectorVersion] = useState<string | null>(null);
     const [isCheckingVersions, setIsCheckingVersions] = useState(false);
@@ -112,8 +117,21 @@ const App: React.FC = () => {
             return () => clearTimeout(timer);
         }
     }, [toast]);
+    
+    // Site Switcher keyboard shortcut
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.key === 'k') {
+                e.preventDefault();
+                setShowSiteSwitcher(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
-    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, siteData?: SiteData | null, displayName?: string, profilePictureUrl?: string | null }) => {
+
+    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, sites?: SiteData[], displayName?: string, profilePictureUrl?: string | null }) => {
         setSecureItem('authToken', data.token);
         setSecureItem('userEmail', data.email);
         setSecureItem('isAdmin', data.isAdmin);
@@ -125,14 +143,17 @@ const App: React.FC = () => {
         setIsLoggedIn(true);
         setDisplayName(data.displayName || '');
         setProfilePictureUrl(data.profilePictureUrl || null);
+        
+        const siteList = data.sites || [];
+        setSites(siteList);
+        setSecureItem('sites', siteList);
 
-        if (data.siteData) {
-            setSiteData(data.siteData);
-            setSecureItem('siteData', data.siteData);
+        if (siteList.length > 0) {
+            const lastUsedSiteId = getSecureItem<number>('lastUsedSiteId');
+            const siteToSet = siteList.find(s => s.id === lastUsedSiteId) || siteList[0];
+            setCurrentSite(siteToSet);
         } else {
-            // Check for locally stored site data if not provided from login
-            const localSiteData = getSecureItem<SiteData>('siteData');
-            setSiteData(localSiteData);
+            setCurrentSite(null);
         }
     };
 
@@ -140,12 +161,14 @@ const App: React.FC = () => {
         removeSecureItem('authToken');
         removeSecureItem('userEmail');
         removeSecureItem('isAdmin');
-        removeSecureItem('siteData');
+        removeSecureItem('sites');
+        removeSecureItem('lastUsedSiteId');
         removeSecureItem('displayName');
         removeSecureItem('profilePictureUrl');
         
         setIsLoggedIn(false);
-        setSiteData(null);
+        setSites([]);
+        setCurrentSite(null);
         setDisplayName('');
         setProfilePictureUrl(null);
         setCurrentView('dashboard');
@@ -153,27 +176,39 @@ const App: React.FC = () => {
         setCurrentAppView('landing');
     };
 
-    const loadSiteData = useCallback(async () => {
+    const loadSites = useCallback(async () => {
         try {
-            const data = await getEncryptedSiteData();
+            const data = await getAllSites();
             if (data) {
-                setSiteData(data);
-                setSecureItem('siteData', data);
+                setSites(data);
+                setSecureItem('sites', data);
+                if (data.length > 0 && !currentSite) {
+                    const lastUsedSiteId = getSecureItem<number>('lastUsedSiteId');
+                    const siteToSet = data.find(s => s.id === lastUsedSiteId) || data[0];
+                    setCurrentSite(siteToSet);
+                }
             }
         } catch (error) {
-            console.error("Could not load remote site data:", error);
-            const localData = getSecureItem<SiteData>('siteData');
-            if (localData) setSiteData(localData);
+            console.error("Could not load remote sites:", error);
+            const localData = getSecureItem<SiteData[]>('sites');
+            if (localData) {
+                setSites(localData);
+                if (localData.length > 0 && !currentSite) {
+                     const lastUsedSiteId = getSecureItem<number>('lastUsedSiteId');
+                     const siteToSet = localData.find(s => s.id === lastUsedSiteId) || localData[0];
+                     setCurrentSite(siteToSet);
+                }
+            }
         }
-    }, []);
+    }, [currentSite]);
 
     const handleUpdateConnector = useCallback(async () => {
-        if (!siteData) return;
+        if (!currentSite) return;
         setIsUpdating(true);
         setUpdateStatus('Updating connector plugin on your WordPress site...');
         try {
             const latestPluginData = await getLatestConnectorPlugin();
-            await updateConnectorPlugin(siteData, latestPluginData.source);
+            await updateConnectorPlugin(currentSite, latestPluginData.source);
             setConnectorVersion(latestPluginData.version); // Optimistically update UI
             setToast({ message: '✅ Connector updated successfully!', type: 'success'});
             setUpdateStatus('Connector updated successfully!');
@@ -185,16 +220,20 @@ const App: React.FC = () => {
             setIsUpdating(false);
             setTimeout(() => setUpdateStatus(''), 5000);
         }
-    }, [siteData]);
+    }, [currentSite]);
 
     // Effect to check connector version
     useEffect(() => {
         const checkVersions = async () => {
-            if (!siteData) return;
+            if (!currentSite) {
+                setConnectorVersion(null);
+                setLatestConnectorVersion(null);
+                return;
+            };
             setIsCheckingVersions(true);
             setUpdateStatus('');
             try {
-                const pingResponse = await testConnection(siteData);
+                const pingResponse = await testConnection(currentSite);
                 const installed = pingResponse.connector_version || 'Unknown';
                 setConnectorVersion(installed);
 
@@ -215,7 +254,7 @@ const App: React.FC = () => {
             }
         };
         checkVersions();
-    }, [siteData, handleUpdateConnector]);
+    }, [currentSite, handleUpdateConnector]);
 
     useEffect(() => {
         const initializeApp = async () => {
@@ -224,25 +263,31 @@ const App: React.FC = () => {
             const token = getSecureItem('authToken');
             if (token) {
               setCurrentAppView('main_app');
-            }
-            const adminStatus = getSecureItem<boolean>('isAdmin');
-            if (token) {
-                setIsLoggedIn(true);
-                setIsAdmin(!!adminStatus);
-                setDisplayName(getSecureItem('displayName') || '');
-                setProfilePictureUrl(getSecureItem('profilePictureUrl'));
-                loadSiteData();
+              setIsLoggedIn(true);
+              setIsAdmin(!!getSecureItem<boolean>('isAdmin'));
+              setDisplayName(getSecureItem('displayName') || '');
+              setProfilePictureUrl(getSecureItem('profilePictureUrl'));
+              loadSites();
             }
         };
         initializeApp();
-    }, [loadInitialConfig, checkBackendStatus, loadSiteData]);
+    }, [loadInitialConfig, checkBackendStatus, loadSites]);
 
-    const handleConnect = (data: SiteData) => {
-        setSiteData(data);
-        setSecureItem('siteData', data);
+    const handleSiteAdded = (newSite: SiteData) => {
+        const newSites = [...sites, newSite];
+        setSites(newSites);
+        setSecureItem('sites', newSites);
+        setCurrentSite(newSite);
+        setSecureItem('lastUsedSiteId', newSite.id);
         setShowConnectorModal(false);
     };
     
+    const handleSwitchSite = (site: SiteData) => {
+        setCurrentSite(site);
+        setSecureItem('lastUsedSiteId', site.id);
+        setShowSiteSwitcher(false);
+    };
+
     const handleEditAsset = (asset: Asset) => {
         setAssetToEdit(asset);
         setFileToEdit(null); // Reset file selection
@@ -272,10 +317,10 @@ const App: React.FC = () => {
     };
 
     const handleTestConnection = async () => {
-        if (!siteData) return;
+        if (!currentSite) return;
         setToast({ message: 'Pinging your site...', type: 'success' }); // Use success for neutral color
         try {
-            const response = await testConnection(siteData);
+            const response = await testConnection(currentSite);
             const version = response?.connector_version;
             const message = version 
                 ? `✅ Connection successful! Connector v${version}`
@@ -302,47 +347,47 @@ const App: React.FC = () => {
     }
 
     const renderView = () => {
-        if (!siteData && !['dashboard', 'settings', 'generator', 'adminPanel', 'backendStatus'].includes(currentView)) {
+        if (!currentSite && !['dashboard', 'settings', 'generator', 'adminPanel', 'backendStatus'].includes(currentView)) {
              return (
                 <div className="text-center p-8">
                     <h2 className="text-2xl font-semibold mb-4">Site Not Connected</h2>
                     <p className="text-text-secondary mb-6">Please connect to a WordPress site to use this feature.</p>
-                    <button onClick={() => setShowConnectorModal(true)} className="btn btn-primary">Connect Now</button>
+                    <button onClick={() => setShowSiteSwitcher(true)} className="btn btn-primary">Connect Now</button>
                 </div>
             );
         }
 
         switch (currentView) {
             case 'dashboard':
-                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} needsConnectorUpdate={needsUpdate} onUpdateConnector={handleUpdateConnector} isUpdatingConnector={isUpdating} />;
+                return <Dashboard onStartChat={handleStartChat} isConnected={!!currentSite} onConnect={() => setShowSiteSwitcher(true)} needsConnectorUpdate={needsUpdate} onUpdateConnector={handleUpdateConnector} isUpdatingConnector={isUpdating} />;
             case 'plugins':
-                return <AssetManager siteData={siteData!} assetType={AssetType.Plugin} onEditAsset={handleEditAsset} />;
+                return <AssetManager siteData={currentSite!} assetType={AssetType.Plugin} onEditAsset={handleEditAsset} />;
             case 'themes':
-                return <AssetManager siteData={siteData!} assetType={AssetType.Theme} onEditAsset={handleEditAsset} />;
+                return <AssetManager siteData={currentSite!} assetType={AssetType.Theme} onEditAsset={handleEditAsset} />;
             case 'database':
-                return <DatabaseManager siteData={siteData!} />;
+                return <DatabaseManager siteData={currentSite!} />;
             case 'generator':
                 return <Generator onGeneratePlugin={() => setShowPluginGenerator(true)} onGenerateTheme={() => setShowThemeGenerator(true)} />;
             case 'scanner':
-                return <SecurityScanner siteData={siteData!} />;
+                return <SecurityScanner siteData={currentSite!} />;
             case 'optimizer':
-                return <PerformanceOptimizer siteData={siteData!} />;
+                return <PerformanceOptimizer siteData={currentSite!} />;
             case 'logs':
-                return <PluginLogViewer siteData={siteData!} />;
+                return <PluginLogViewer siteData={currentSite!} />;
             case 'fileManager':
-                return <FileManager siteData={siteData!} onEditFile={handleEditFile} />;
+                return <FileManager siteData={currentSite!} onEditFile={handleEditFile} />;
             case 'backupRestore':
-                return <BackupRestore siteData={siteData!} />;
+                return <BackupRestore siteData={currentSite!} />;
             case 'copilot':
-                return <CoPilotView siteData={siteData} />;
+                return <CoPilotView siteData={currentSite} />;
             case 'adminPanel':
                 return <AdminPanel />;
             case 'backendStatus':
                 return <BackendStatusView />;
             case 'settings':
-                return <Settings siteData={siteData} onDisconnect={handleLogout} onProfileUpdate={handleProfileUpdate} connectorVersionInfo={{ connectorVersion, latestConnectorVersion, isCheckingVersions, isUpdating, updateStatus }} onUpdateConnector={handleUpdateConnector}/>;
+                return <Settings siteData={currentSite} onDisconnect={handleLogout} onProfileUpdate={handleProfileUpdate} connectorVersionInfo={{ connectorVersion, latestConnectorVersion, isCheckingVersions, isUpdating, updateStatus }} onUpdateConnector={handleUpdateConnector}/>;
             default:
-                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} needsConnectorUpdate={needsUpdate} onUpdateConnector={handleUpdateConnector} isUpdatingConnector={isUpdating} />;
+                return <Dashboard onStartChat={handleStartChat} isConnected={!!currentSite} onConnect={() => setShowSiteSwitcher(true)} needsConnectorUpdate={needsUpdate} onUpdateConnector={handleUpdateConnector} isUpdatingConnector={isUpdating} />;
         }
     };
     
@@ -377,10 +422,10 @@ const App: React.FC = () => {
             <Sidebar currentView={currentView} setView={setCurrentView} onLogout={handleLogout} isAdmin={isAdmin} />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <Header 
-                    isConnected={!!siteData} 
-                    siteUrl={siteData?.siteUrl || ''} 
-                    onConnect={() => setShowConnectorModal(true)} 
-                    onRefresh={loadSiteData}
+                    sites={sites}
+                    currentSite={currentSite}
+                    onOpenSiteSwitcher={() => setShowSiteSwitcher(true)}
+                    onRefresh={loadSites}
                     onTestConnection={handleTestConnection}
                     displayName={displayName}
                     profilePictureUrl={profilePictureUrl}
@@ -400,11 +445,24 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {showConnectorModal && <ConnectorSetupModal onClose={() => setShowConnectorModal(false)} onSiteAdded={handleConnect} />}
-            {showCoPilotModal && <CoPilot onClose={() => setShowCoPilotModal(false)} siteData={siteData} initialPrompt={coPilotInitialPrompt} modalBgColor={modalBgColor} />}
-            {showEditor && assetToEdit && <CodeEditor siteData={siteData!} asset={assetToEdit} initialFile={fileToEdit || undefined} onClose={() => setShowEditor(false)} modalBgColor={modalBgColor} />}
-            {showPluginGenerator && <PluginGeneratorModal onClose={() => setShowPluginGenerator(false)} siteData={siteData} modalBgColor={modalBgColor} />}
-            {showThemeGenerator && <ThemeGeneratorModal onClose={() => setShowThemeGenerator(false)} siteData={siteData} modalBgColor={modalBgColor} />}
+            {showSiteSwitcher && (
+                 <SiteSwitcherModal
+                    sites={sites}
+                    currentSiteId={currentSite?.id || null}
+                    onSwitchSite={handleSwitchSite}
+                    onAddNewSite={() => {
+                        setShowSiteSwitcher(false);
+                        setShowConnectorModal(true);
+                    }}
+                    onClose={() => setShowSiteSwitcher(false)}
+                />
+            )}
+
+            {showConnectorModal && <ConnectorSetupModal onClose={() => setShowConnectorModal(false)} onSiteAdded={handleSiteAdded} />}
+            {showCoPilotModal && <CoPilot onClose={() => setShowCoPilotModal(false)} siteData={currentSite} initialPrompt={coPilotInitialPrompt} modalBgColor={modalBgColor} />}
+            {showEditor && assetToEdit && <CodeEditor siteData={currentSite!} asset={assetToEdit} initialFile={fileToEdit || undefined} onClose={() => setShowEditor(false)} modalBgColor={modalBgColor} />}
+            {showPluginGenerator && <PluginGeneratorModal onClose={() => setShowPluginGenerator(false)} siteData={currentSite} modalBgColor={modalBgColor} />}
+            {showThemeGenerator && <ThemeGeneratorModal onClose={() => setShowThemeGenerator(false)} siteData={currentSite} modalBgColor={modalBgColor} />}
         </div>
     );
 };

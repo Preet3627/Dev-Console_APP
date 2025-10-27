@@ -1,3 +1,4 @@
+
 export const pluginSourceCode = `<?php
 /**
  * Plugin Name: Dev-Console Connector
@@ -54,7 +55,7 @@ class Dev_Console_Connector {
             if (!function_exists('wp_generate_password')) { require_once ABSPATH . 'wp-includes/pluggable.php'; }
             update_option(DC_API_KEY_OPTION, wp_generate_password(64, false, false));
         }
-        if (!get_option(DC_CORS_SETTINGS_OPTION)) { add_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => 'dev.ponsrischool.in']); }
+        if (!get_option(DC_CORS_SETTINGS_OPTION)) { add_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "https://dev.ponsrischool.in\\nhttp://localhost:5173"]); }
     }
 
     public static function activate() {
@@ -79,15 +80,19 @@ class Dev_Console_Connector {
                     <tr>
                         <th scope="row"><label for="dc_connector_key">Connector Key</label></th>
                         <td>
-                            <input type="text" id="dc_connector_key" readonly value="<?php echo esc_attr(get_option(DC_CONNECTOR_KEY_OPTION)); ?>" class="regular-text" />
-                            <button type="button" class="button button-secondary" onclick="copyToClipboard('dc_connector_key')">Copy</button>
+                            <input type="password" id="dc_connector_key" readonly value="<?php echo esc_attr(get_option(DC_CONNECTOR_KEY_OPTION)); ?>" class="regular-text" />
+                            <button type="button" class="button button-secondary" onclick="toggleKeyVisibility('dc_connector_key', this)">Show</button>
+                            <button type="button" class="button button-secondary" onclick="copyToClipboard('dc_connector_key', 'dc_connector_key_feedback')">Copy</button>
+                            <span id="dc_connector_key_feedback" style="margin-left: 10px; color: green; vertical-align: middle;"></span>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="dc_api_key">API Key</label></th>
                         <td>
-                            <input type="text" id="dc_api_key" readonly value="<?php echo esc_attr(get_option(DC_API_KEY_OPTION)); ?>" class="regular-text" />
-                             <button type="button" class="button button-secondary" onclick="copyToClipboard('dc_api_key')">Copy</button>
+                            <input type="password" id="dc_api_key" readonly value="<?php echo esc_attr(get_option(DC_API_KEY_OPTION)); ?>" class="regular-text" />
+                             <button type="button" class="button button-secondary" onclick="toggleKeyVisibility('dc_api_key', this)">Show</button>
+                             <button type="button" class="button button-secondary" onclick="copyToClipboard('dc_api_key', 'dc_api_key_feedback')">Copy</button>
+                             <span id="dc_api_key_feedback" style="margin-left: 10px; color: green; vertical-align: middle;"></span>
                         </td>
                     </tr>
                 </tbody>
@@ -97,7 +102,7 @@ class Dev_Console_Connector {
 
             <div id="dc-connector-settings-form">
                 <?php
-                $options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => 'dev.ponsrischool.in']);
+                $options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "https://dev.ponsrischool.in\\nhttp://localhost:5173"]);
                 ?>
                 <h2>Security: Allowed Origins (CORS)</h2>
                 <p>Control which frontend domains can access this site's Connector API.</p>
@@ -127,12 +132,38 @@ class Dev_Console_Connector {
             </div>
         </div>
         <script>
-            function copyToClipboard(elementId) {
+            function toggleKeyVisibility(elementId, button) {
+                var keyInput = document.getElementById(elementId);
+                if (keyInput.type === 'password') {
+                    keyInput.type = 'text';
+                    button.textContent = 'Hide';
+                } else {
+                    keyInput.type = 'password';
+                    button.textContent = 'Show';
+                }
+            }
+
+            function copyToClipboard(elementId, feedbackId) {
                 var copyText = document.getElementById(elementId);
+                var feedbackSpan = document.getElementById(feedbackId);
+                
+                var originalType = copyText.type;
+                if (originalType === 'password') {
+                    copyText.type = 'text';
+                }
+
                 copyText.select();
-                copyText.setSelectionRange(0, 99999); /* For mobile devices */
+                copyText.setSelectionRange(0, 99999);
                 document.execCommand("copy");
-                alert("Copied the key!");
+
+                if (originalType === 'password') {
+                    copyText.type = 'password';
+                }
+                
+                feedbackSpan.textContent = 'Copied!';
+                setTimeout(function() {
+                    feedbackSpan.textContent = '';
+                }, 2000);
             }
 
             document.addEventListener('DOMContentLoaded', function() {
@@ -337,6 +368,9 @@ class Dev_Console_Connector {
     }
 
     private function action_write_file_content($payload) {
+        if (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) {
+            throw new DC_Connector_Exception('File editing is disabled on this site. To enable it, set DISALLOW_FILE_EDIT to false in your wp-config.php file.');
+        }
         global $wp_filesystem;
         if (!WP_Filesystem()) { throw new DC_Connector_Exception('Could not initialize WordPress Filesystem. Please check your wp-config.php for FS_METHOD or define filesystem credentials.'); }
         $path = $this->resolve_path($payload['assetIdentifier'], $payload['assetType'], $payload['relativePath']);
@@ -487,7 +521,7 @@ class Dev_Console_Connector {
         $asset_dir = $base_path . '/' . $asset_name_slug;
 
         if ($wp_filesystem->exists($asset_dir)) {
-            throw new DC_Connector_Exception(ucfirst($asset_type) . ' folder \'' . esc_html($asset_name_slug) . '\' already exists.');
+            throw new DC_Connector_Exception(ucfirst($asset_type) . " folder '" . esc_html($asset_name_slug) . "' already exists.");
         }
         if (!$wp_filesystem->mkdir($asset_dir)) { throw new DC_Connector_Exception('Could not create directory for the new ' . $asset_type . '. Check server permissions.'); }
 
@@ -583,7 +617,7 @@ class Dev_Console_Connector {
 
         $admin_user = get_user_by('login', 'admin');
         $results[] = ['id' => 'default_admin', 'title' => 'Default "admin" User Does Not Exist', 'status' => $admin_user ? 'fail' : 'pass', 'severity' => 'High', 'description' => 'Using the default "admin" username makes brute-force attacks easier.', 'recommendation' => 'Create a new administrator account with a unique username and delete the default "admin" account.'];
-        $results[] = ['id' => 'file_edit', 'title' => 'File Editing is Disabled in wp-admin', 'status' => (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) ? 'pass' : 'warn', 'severity' => 'Medium', 'description' => 'Allowing file editing from the WordPress admin can be a security risk if an admin account is compromised.', 'recommendation' => "Add \`define('DISALLOW_FILE_EDIT', true);\` to your wp-config.php file."];
+        $results[] = ['id' => 'file_edit', 'title' => 'File Editing is Disabled in wp-admin', 'status' => (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) ? 'pass' : 'warn', 'severity' => 'Medium', 'description' => 'Allowing file editing from the WordPress admin can be a security risk if an admin account is compromised.', 'recommendation' => "Add `define('DISALLOW_FILE_EDIT', true);` to your wp-config.php file."];
         $results[] = ['id' => 'db_prefix', 'title' => 'Database Prefix is Not Default', 'status' => ($wpdb->prefix === 'wp_') ? 'fail' : 'pass', 'severity' => 'Medium', 'description' => 'Using the default "wp_" database prefix makes SQL injection attacks easier.', 'recommendation' => 'Use a unique database prefix. This requires a more involved process to change on an existing site.'];
 
         return $results;

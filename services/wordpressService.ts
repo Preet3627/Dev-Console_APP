@@ -1,3 +1,4 @@
+
 import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus } from '../types';
 import { getSecureItem, setSecureItem, removeSecureItem, encryptData, decryptData } from '../utils/secureLocalStorage';
 
@@ -102,7 +103,7 @@ export const testConnection = async (siteData: SiteData): Promise<any> => {
 
 
 // --- Auth Functions ---
-export const loginUser = async (email: string, password: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, siteData: SiteData | null, displayName: string, profilePictureUrl: string | null }> => {
+export const loginUser = async (email: string, password: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, sites: SiteData[], displayName: string, profilePictureUrl: string | null }> => {
     const response = await masterApiFetch('/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
@@ -131,7 +132,7 @@ export const resendVerificationCode = async (email: string): Promise<{ success: 
     });
 };
 
-export const signInWithGoogle = async (googleToken: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, siteData: SiteData | null, displayName: string, profilePictureUrl: string | null }> => {
+export const signInWithGoogle = async (googleToken: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, sites: SiteData[], displayName: string, profilePictureUrl: string | null }> => {
     const response = await masterApiFetch('/google-signin', {
         method: 'POST',
         body: JSON.stringify({ token: googleToken }),
@@ -154,7 +155,26 @@ export const addSite = async (name: string, site_data_encrypted: string): Promis
     });
 };
 
+export const deleteSite = async (id: number): Promise<void> => {
+    await masterApiFetch(`/sites/${id}`, { method: 'DELETE' });
+};
+
+
 // --- Settings & Site Data ---
+export const getAllSites = async (): Promise<SiteData[]> => {
+    const response = await masterApiFetch('/sites'); // response is [{ id, name, site_data_encrypted }]
+    return response.map((site: any) => {
+        const decrypted = decryptData<{ siteUrl: string; connectorKey: string; apiKey: string; }>(site.site_data_encrypted);
+        if (!decrypted) return null;
+        return {
+            id: site.id,
+            name: site.name,
+            ...decrypted
+        };
+    }).filter(Boolean); // Filter out any nulls from decryption failures
+};
+
+
 export const saveAppSettings = async (settings: AppSettings): Promise<void> => {
     await masterApiFetch('/settings', {
         method: 'POST',

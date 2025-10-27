@@ -1,4 +1,5 @@
 
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -627,7 +628,7 @@ apiV1Router.post('/profile', authenticateToken, async (req, res) => {
 // --- PLUGIN UPDATER ---
 apiV1Router.get('/connector-plugin/latest', authenticateToken, (req, res) => {
     try {
-        const versionMatch = pluginSourceCode.match(/Version:\s*(.*)/);
+        const versionMatch = pluginSourceCode.match(/Version:\\s*(.*)/);
         const version = versionMatch ? versionMatch[1].trim() : '0.0.0';
         res.json({
             version: version,
