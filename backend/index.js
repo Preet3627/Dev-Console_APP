@@ -27,7 +27,7 @@ for (const envVar of requiredEnv) {
     }
 }
 // FIX: Check for GOOGLE_CLIENT_ID separately as it's critical for Google sign-in.
-if (!process.env.GOOGLE_CLIENT_ID && !'59869142203-8qna4rfo93rrv9uiok3bes28pfu5k1l1.apps.googleusercontent.com') {
+if (!process.env.GOOGLE_CLIENT_ID) {
     console.warn(`🚨 WARNING: Environment variable GOOGLE_CLIENT_ID is not set!`);
 }
 
@@ -128,6 +128,7 @@ const sendVerificationEmail = async (email, code) => {
 };
 
 const createTables = async (connection) => {
+    // FIX: Added display_name and profile_picture_url to the users table schema.
     await connection.query(`
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -142,6 +143,19 @@ const createTables = async (connection) => {
             registered_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     `);
+
+    // FIX: Check for and add missing columns for backward compatibility. This makes the update non-destructive.
+    const [columns] = await connection.query("SHOW COLUMNS FROM users");
+    const columnNames = columns.map(c => c.Field);
+
+    if (!columnNames.includes('display_name')) {
+        await connection.query('ALTER TABLE users ADD COLUMN display_name VARCHAR(255) AFTER password_hash');
+        console.log('✅ Migrated database: Added `display_name` column to `users` table.');
+    }
+    if (!columnNames.includes('profile_picture_url')) {
+        await connection.query('ALTER TABLE users ADD COLUMN profile_picture_url TEXT AFTER display_name');
+        console.log('✅ Migrated database: Added `profile_picture_url` column to `users` table.');
+    }
     
     await connection.query(`
         CREATE TABLE IF NOT EXISTS app_settings (
@@ -329,7 +343,12 @@ apiV1Router.post('/register', async (req, res) => {
 
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ message: 'Internal server error during registration.' });
+        // Provide a more specific error if it's a known database issue
+        if (error.code && error.code.startsWith('ER_')) {
+            res.status(500).json({ message: 'A database error occurred during registration. Please ensure the database is running and configured correctly.' });
+        } else {
+            res.status(500).json({ message: 'An internal server error occurred during registration.' });
+        }
     } finally {
         if (connection) await connection.end();
     }
@@ -440,92 +459,101 @@ apiV1Router.post('/resend-verification', async (req, res) => {
 });
 
 apiV1Router.post('/google-signin', async (req, res) => {
-    if (!isDbConfigured || !googleAuthClient) return res.status(403).json({ message: 'Database or Google Client ID not configured.' });
+    if (!isDbConfigured || !googleAuthClient) {
+        return res.status(503).json({ message: 'Service unavailable: Database or Google Client ID not configured.' });
+    }
 
     const { token } = req.body;
-    let connection;
+    let payload;
+
+    // Step 1: Verify the Google token first.
     try {
         const ticket = await googleAuthClient.verifyIdToken({
             idToken: token,
             audience: GOOGLE_CLIENT_ID,
         });
-        const payload = ticket.getPayload();
-        const { sub: google_id, email, email_verified, name, picture } = payload;
-
-        if (!email_verified) {
-            return res.status(400).json({ message: 'Google account is not verified.' });
-        }
-
-        connection = await mysql.createConnection(dbConfig);
-        
-        try {
-            await connection.beginTransaction();
-            let [users] = await connection.query('SELECT * FROM users WHERE google_id = ? OR email = ?', [google_id, email]);
-            let user;
-            let isNewUser = false;
-
-            if (users.length > 0) {
-                user = users[0];
-                // FIX: Always update name and picture from Google, as it's the source of truth for Google logins.
-                // Also ensure the account is linked and verified.
-                await connection.query(
-                    'UPDATE users SET google_id = ?, display_name = ?, profile_picture_url = ?, is_verified = true WHERE id = ?',
-                    [google_id, name, picture, user.id]
-                );
-            } else {
-                isNewUser = true;
-                const displayName = name || email.split('@')[0];
-                const [result] = await connection.query(
-                    'INSERT INTO users (email, display_name, profile_picture_url, is_verified, is_admin, google_id) VALUES (?, ?, ?, ?, ?, ?)',
-                    [email, displayName, picture, true, false, google_id]
-                );
-                const [insertedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
-                user = insertedUsers[0];
-            }
-
-            // Refresh user data after potential updates
-            const [refreshedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [user.id]);
-            user = refreshedUsers[0];
-
-            const [settingsRows] = await connection.query('SELECT settings_json FROM app_settings WHERE user_id = ?', [user.id]);
-            let settings = settingsRows.length > 0 ? JSON.parse(settingsRows[0].settings_json) : {};
-
-            if (isNewUser) {
-                 settings = {
-                    "aiProvider": "gemini", "creditSaverEnabled": true, "geminiApiKey": "", "geminiModel": "gemini-2.5-flash",
-                    "googleClientId": GOOGLE_CLIENT_ID,
-                 };
-                 await connection.query('INSERT INTO app_settings (user_id, settings_json) VALUES (?, ?)', [user.id, JSON.stringify(settings)]);
-            }
-
-            settings.googleClientId = GOOGLE_CLIENT_ID;
-
-            const [sitesRows] = await connection.query('SELECT id, name, site_data_encrypted FROM user_sites WHERE user_id = ?', [user.id]);
-            const sites = sitesRows;
-            
-            await connection.commit();
-            
-            const jwtToken = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
-            res.json({ 
-                token: jwtToken, 
-                email: user.email, 
-                isAdmin: !!user.is_admin, 
-                settings, 
-                sites,
-                displayName: user.display_name,
-                profilePictureUrl: user.profile_picture_url
-            });
-        } catch (innerError) {
-            await connection.rollback();
-            throw innerError;
+        payload = ticket.getPayload();
+        if (!payload) {
+            // This case should be rare if verifyIdToken succeeds, but it's good practice.
+            throw new Error("Invalid token payload received from Google.");
         }
     } catch (error) {
-        console.error('Google Sign-In error:', error);
+        console.error('Google Sign-In Token Verification Error:', error);
         if (error.message && error.message.toLowerCase().includes('audience')) {
-             res.status(401).json({ message: 'Google Sign-In failed. Audience mismatch. Check your Google Client ID configuration.' });
-        } else {
-            res.status(401).json({ message: 'Google Sign-In failed. The provided token is invalid or expired.' });
+             return res.status(401).json({ message: 'Google Sign-In failed due to an audience mismatch. Ensure your GOOGLE_CLIENT_ID is correct in the .env file.' });
         }
+        return res.status(401).json({ message: 'Google Sign-In failed. The provided token is invalid, expired, or could not be verified.' });
+    }
+    
+    // Step 2: Handle database operations now that the token is verified.
+    const { sub: google_id, email, email_verified, name, picture } = payload;
+
+    if (!email_verified) {
+        return res.status(400).json({ message: 'Google account is not verified.' });
+    }
+    
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        await connection.beginTransaction();
+        
+        let [users] = await connection.query('SELECT * FROM users WHERE google_id = ? OR email = ?', [google_id, email]);
+        let user;
+        let isNewUser = false;
+
+        if (users.length > 0) {
+            user = users[0];
+            await connection.query(
+                'UPDATE users SET google_id = ?, display_name = ?, profile_picture_url = ?, is_verified = true WHERE id = ?',
+                [google_id, name, picture, user.id]
+            );
+        } else {
+            isNewUser = true;
+            const displayName = name || email.split('@')[0];
+            const [result] = await connection.query(
+                'INSERT INTO users (email, display_name, profile_picture_url, is_verified, is_admin, google_id) VALUES (?, ?, ?, ?, ?, ?)',
+                [email, displayName, picture, true, false, google_id]
+            );
+            const [insertedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
+            user = insertedUsers[0];
+        }
+
+        const [refreshedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [user.id]);
+        user = refreshedUsers[0];
+
+        const [settingsRows] = await connection.query('SELECT settings_json FROM app_settings WHERE user_id = ?', [user.id]);
+        let settings = settingsRows.length > 0 ? JSON.parse(settingsRows[0].settings_json) : {};
+
+        if (isNewUser) {
+             settings = {
+                "aiProvider": "gemini", "creditSaverEnabled": true, "geminiApiKey": "", "geminiModel": "gemini-2.5-flash",
+                "googleClientId": GOOGLE_CLIENT_ID,
+             };
+             await connection.query('INSERT INTO app_settings (user_id, settings_json) VALUES (?, ?)', [user.id, JSON.stringify(settings)]);
+        }
+
+        settings.googleClientId = GOOGLE_CLIENT_ID;
+
+        const [sitesRows] = await connection.query('SELECT id, name, site_data_encrypted FROM user_sites WHERE user_id = ?', [user.id]);
+        const sites = sitesRows;
+        
+        await connection.commit();
+        
+        const jwtToken = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
+        res.json({ 
+            token: jwtToken, 
+            email: user.email, 
+            isAdmin: !!user.is_admin, 
+            settings, 
+            sites,
+            displayName: user.display_name,
+            profilePictureUrl: user.profile_picture_url
+        });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Google Sign-In Database/Logic Error:', error);
+        res.status(500).json({ message: 'A server error occurred after authenticating with Google. Please check the server logs.' });
     } finally {
         if (connection) await connection.end();
     }

@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { PM_SHRI_Logo, GenerateIcon, CoPilotIcon, ShieldIcon, SpeedIcon, FileIcon, DatabaseIcon } from './icons/Icons';
 
@@ -157,7 +158,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                         <p className="mt-4 text-lg text-text-secondary">Your entire WordPress workflow, beautifully unified in a single, elegant interface.</p>
                     </div>
                     <div className="animate-on-scroll zoom-in" style={{ animationDelay: '0.2s' }}>
-                        <div className="relative max-w-2xl mx-auto">
+                        <div className="relative max-w-7xl mx-auto" style={{ width: '95%' }}>
                            <img src="https://ponsrischool.in/wp-content/uploads/2025/10/dev.ponsrischool.in_S26-Ultra-scaled.png" alt="Dev-Console Dashboard" className="w-full h-auto shadow-2xl rounded-2xl" />
                         </div>
                     </div>

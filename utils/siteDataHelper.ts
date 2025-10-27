@@ -1,4 +1,4 @@
-import { SiteData } from '@/types';
+import { SiteData } from '../types';
 
 let currentSiteData: SiteData | null = null;
 
