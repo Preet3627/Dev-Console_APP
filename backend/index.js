@@ -42,15 +42,13 @@ const dbConfig = {
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE
+    database: process.env.DB_DATABASE,
+    // Add connection timeout for serverless environments
+    connectTimeout: 10000 
 };
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-for-demo-mode';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
-
-
-// --- Database Connection Pool ---
-const pool = isDbConfigured ? mysql.createPool(dbConfig) : null;
 
 // --- Nodemailer Transporter ---
 let transporter = null;
@@ -99,8 +97,11 @@ const generateVerificationCode = () => Math.floor(100000 + Math.random() * 90000
 const sendVerificationEmail = async (email, code) => {
     if (transporter) {
         try {
+            const fromName = process.env.SMTP_FROM || 'Dev-Console';
+            const fromEmail = process.env.SMTP_USER; // Use SMTP_USER as the sender email address
+
             await transporter.sendMail({
-                from: `"Dev-Console" <${process.env.SMTP_FROM}>`,
+                from: `"${fromName}" <${fromEmail}>`,
                 to: email,
                 subject: 'Your Dev-Console Verification Code',
                 text: `Your verification code is: ${code}`,
@@ -150,8 +151,9 @@ const createTables = async (connection) => {
 
 
 const seedAdminUser = async () => {
-    const connection = await pool.getConnection();
+    let connection;
     try {
+        connection = await mysql.createConnection(dbConfig);
         const [users] = await connection.query('SELECT COUNT(*) as count FROM users');
         if (users[0].count === 0) {
             console.log('No users found. Seeding default admin account...');
@@ -193,7 +195,7 @@ const seedAdminUser = async () => {
     } catch (error) {
         console.error('Error during database seeding:', error);
     } finally {
-        connection.release();
+        if (connection) await connection.end();
     }
 };
 
@@ -214,16 +216,18 @@ apiV1Router.get('/status', async (req, res) => {
         backend: 'ok',
         database: 'checking'
     };
+    let connection;
     try {
-        const connection = await pool.getConnection();
+        connection = await mysql.createConnection(dbConfig);
         await connection.query('SELECT 1');
-        connection.release();
         status.database = 'ok';
         res.json(status);
     } catch (error) {
         status.database = 'error';
         status.message = error.message;
         res.status(500).json(status);
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
@@ -237,8 +241,10 @@ apiV1Router.post('/register', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: 'Email and password are required.' });
 
+    let connection;
     try {
-        const [existingUsers] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+        connection = await mysql.createConnection(dbConfig);
+        const [existingUsers] = await connection.query('SELECT id FROM users WHERE email = ?', [email]);
         if (existingUsers.length > 0) {
             return res.status(409).json({ message: 'User with this email already exists.' });
         }
@@ -246,7 +252,7 @@ apiV1Router.post('/register', async (req, res) => {
         const password_hash = await bcrypt.hash(password, 10);
         const verification_code = generateVerificationCode();
         
-        await pool.query(
+        await connection.query(
             'INSERT INTO users (email, password_hash, verification_code) VALUES (?, ?, ?)',
             [email, password_hash, verification_code]
         );
@@ -261,6 +267,8 @@ apiV1Router.post('/register', async (req, res) => {
     } catch (error) {
         console.error('Registration error:', error);
         res.status(500).json({ message: 'Internal server error during registration.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
@@ -271,8 +279,10 @@ apiV1Router.post('/login', async (req, res) => {
         return res.status(503).json({ message: 'Service unavailable: Database is not configured.' });
     }
 
+    let connection;
     try {
-        const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+        connection = await mysql.createConnection(dbConfig);
+        const [users] = await connection.query('SELECT * FROM users WHERE email = ?', [email]);
         if (users.length === 0) return res.status(401).json({ message: 'Invalid credentials.' });
 
         const user = users[0];
@@ -287,11 +297,15 @@ apiV1Router.post('/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) return res.status(401).json({ message: 'Invalid credentials.' });
 
-        const [settingsRows] = await pool.query('SELECT settings_json FROM app_settings WHERE user_id = ?', [user.id]);
-        const [siteDataRows] = await pool.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [user.id]);
+        const [settingsRows] = await connection.query('SELECT settings_json FROM app_settings WHERE user_id = ?', [user.id]);
+        const [siteDataRows] = await connection.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [user.id]);
 
         const settings = settingsRows.length > 0 ? JSON.parse(settingsRows[0].settings_json) : {};
         const siteData = siteDataRows.length > 0 ? siteDataRows[0].site_data_encrypted : null;
+
+        // FIX: Always inject the server's current Google Client ID into the settings object.
+        // This ensures that the frontend has the correct ID even if it wasn't set when the user was created.
+        settings.googleClientId = process.env.GOOGLE_CLIENT_ID;
 
         const token = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
 
@@ -300,34 +314,42 @@ apiV1Router.post('/login', async (req, res) => {
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ message: 'Internal server error.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
 apiV1Router.post('/verify', async (req, res) => {
     if (!isDbConfigured) return res.status(403).json({ message: 'Database not configured.' });
     const { email, code } = req.body;
+    let connection;
     try {
-        const [users] = await pool.query('SELECT id, verification_code FROM users WHERE email = ?', [email]);
+        connection = await mysql.createConnection(dbConfig);
+        const [users] = await connection.query('SELECT id, verification_code FROM users WHERE email = ?', [email]);
         if (users.length === 0) return res.status(404).json({ message: 'User not found.' });
         
         const user = users[0];
         if (user.verification_code !== code) return res.status(400).json({ message: 'Invalid verification code.' });
 
-        await pool.query('UPDATE users SET is_verified = true, verification_code = NULL WHERE id = ?', [user.id]);
+        await connection.query('UPDATE users SET is_verified = true, verification_code = NULL WHERE id = ?', [user.id]);
         res.json({ success: true, message: 'Account verified successfully. You can now log in.' });
 
     } catch (error) {
         console.error('Verification error:', error);
         res.status(500).json({ message: 'Internal server error.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
 apiV1Router.post('/resend-verification', async (req, res) => {
     if (!isDbConfigured) return res.status(403).json({ message: 'Database not configured.' });
     const { email } = req.body;
+    let connection;
     try {
+        connection = await mysql.createConnection(dbConfig);
         const verification_code = generateVerificationCode();
-        const [result] = await pool.query('UPDATE users SET verification_code = ? WHERE email = ? AND is_verified = false', [verification_code, email]);
+        const [result] = await connection.query('UPDATE users SET verification_code = ? WHERE email = ? AND is_verified = false', [verification_code, email]);
         
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: 'User not found or already verified.' });
@@ -342,6 +364,8 @@ apiV1Router.post('/resend-verification', async (req, res) => {
     } catch(error) {
         console.error('Resend code error:', error);
         res.status(500).json({ message: 'Internal server error.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
@@ -349,6 +373,7 @@ apiV1Router.post('/google-signin', async (req, res) => {
     if (!isDbConfigured || !googleAuthClient) return res.status(403).json({ message: 'Database or Google Client ID not configured.' });
 
     const { token } = req.body;
+    let connection;
     try {
         const ticket = await googleAuthClient.verifyIdToken({
             idToken: token,
@@ -361,7 +386,8 @@ apiV1Router.post('/google-signin', async (req, res) => {
             return res.status(400).json({ message: 'Google account is not verified.' });
         }
 
-        const connection = await pool.getConnection();
+        connection = await mysql.createConnection(dbConfig);
+        
         try {
             await connection.beginTransaction();
             let [users] = await connection.query('SELECT * FROM users WHERE google_id = ? OR email = ?', [google_id, email]);
@@ -394,6 +420,9 @@ apiV1Router.post('/google-signin', async (req, res) => {
                  await connection.query('INSERT INTO app_settings (user_id, settings_json) VALUES (?, ?)', [user.id, JSON.stringify(settings)]);
             }
 
+            // FIX: Always inject the server's current Google Client ID into the settings object.
+            settings.googleClientId = process.env.GOOGLE_CLIENT_ID;
+
             const [siteDataRows] = await connection.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [user.id]);
             const siteData = siteDataRows.length > 0 ? siteDataRows[0].site_data_encrypted : null;
             
@@ -404,12 +433,12 @@ apiV1Router.post('/google-signin', async (req, res) => {
         } catch (innerError) {
             await connection.rollback();
             throw innerError;
-        } finally {
-            connection.release();
         }
     } catch (error) {
         console.error('Google Sign-In error:', error);
         res.status(401).json({ message: 'Google Sign-In failed. Invalid token.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
@@ -417,63 +446,83 @@ apiV1Router.post('/google-signin', async (req, res) => {
 // SETTINGS & SITE DATA
 apiV1Router.get('/site-data', authenticateToken, async (req, res) => {
     if (!isDbConfigured) return res.status(204).send();
+    let connection;
     try {
-        const [rows] = await pool.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [req.user.id]);
+        connection = await mysql.createConnection(dbConfig);
+        const [rows] = await connection.query('SELECT site_data_encrypted FROM site_data WHERE user_id = ?', [req.user.id]);
         if (rows.length === 0) return res.status(204).send();
         res.json({ data: rows[0].site_data_encrypted });
     } catch (error) {
         res.status(500).json({ message: 'Failed to fetch site data.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
 apiV1Router.post('/site-data', authenticateToken, async (req, res) => {
     if (!isDbConfigured) return res.sendStatus(204);
     const { data } = req.body;
+    let connection;
     try {
-        await pool.query(
+        connection = await mysql.createConnection(dbConfig);
+        await connection.query(
             'INSERT INTO site_data (user_id, site_data_encrypted) VALUES (?, ?) ON DUPLICATE KEY UPDATE site_data_encrypted = ?',
             [req.user.id, data, data]
         );
         res.sendStatus(204);
     } catch (error) {
         res.status(500).json({ message: 'Failed to save site data.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
 apiV1Router.post('/settings', authenticateToken, async (req, res) => {
     if (!isDbConfigured) return res.sendStatus(204);
     const settings = req.body;
+    let connection;
     try {
-        await pool.query(
+        connection = await mysql.createConnection(dbConfig);
+        await connection.query(
             'INSERT INTO app_settings (user_id, settings_json) VALUES (?, ?) ON DUPLICATE KEY UPDATE settings_json = ?',
             [req.user.id, JSON.stringify(settings), JSON.stringify(settings)]
         );
         res.sendStatus(204);
     } catch (error) {
         res.status(500).json({ message: 'Failed to save settings.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
 // ADMIN
 apiV1Router.get('/users', authenticateToken, isAdmin, async (req, res) => {
     if (!isDbConfigured) return res.json([]);
+    let connection;
     try {
-        const [users] = await pool.query('SELECT id, email, registered_date FROM users ORDER BY registered_date DESC');
+        connection = await mysql.createConnection(dbConfig);
+        const [users] = await connection.query('SELECT id, email, registered_date FROM users ORDER BY registered_date DESC');
         const usersWithSiteData = users.map(u => ({...u, site_url: 'N/A'}));
         res.json(usersWithSiteData);
     } catch (error) {
         res.status(500).json({ message: 'Failed to fetch users.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
 apiV1Router.delete('/users', authenticateToken, isAdmin, async (req, res) => {
     if (!isDbConfigured) return res.json({ success: true });
     const { email } = req.body;
+    let connection;
     try {
-        await pool.query('DELETE FROM users WHERE email = ?', [email]);
+        connection = await mysql.createConnection(dbConfig);
+        await connection.query('DELETE FROM users WHERE email = ?', [email]);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ message: 'Failed to delete user.' });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
@@ -495,23 +544,25 @@ const initializeAndStartServer = async () => {
     console.log('🚀 Dev-Console backend server starting...');
 
     if (isDbConfigured) {
+        let tempConnection;
         try {
             const { host, user, password, database } = dbConfig;
-            const tempConnection = await mysql.createConnection({ host, user, password });
+            tempConnection = await mysql.createConnection({ host, user, password });
             await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${database}\``);
-            await tempConnection.end();
             console.log(`✅ Database "${database}" is present.`);
+            await tempConnection.end();
 
-            const poolConnection = await pool.getConnection();
-            await createTables(poolConnection);
-            poolConnection.release();
+            tempConnection = await mysql.createConnection(dbConfig);
+            await createTables(tempConnection);
             console.log('✅ Tables are present.');
+            await tempConnection.end();
             
             await seedAdminUser();
             
             console.log('✅ Database setup complete.');
 
         } catch (error) {
+            if (tempConnection) await tempConnection.end();
             console.error('🚨 FAILED TO INITIALIZE DATABASE CONNECTION:');
             console.error(`🚨 DB Host: ${dbConfig.host}`);
             console.error(`🚨 DB User: ${dbConfig.user}`);
@@ -525,10 +576,18 @@ const initializeAndStartServer = async () => {
         console.warn('🟡 To enable database features, create a .env file with DB_HOST, DB_USER, DB_PASSWORD, and DB_DATABASE.');
     }
 
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`✅ Backend server is listening on all interfaces, port ${PORT}`);
-        console.log(`   - Local:   http://localhost:${PORT}`);
-    });
+    // In a serverless environment like Vercel, app.listen() is not needed.
+    // The framework handles invoking the express app.
+    // We only listen in a local environment.
+    if (!process.env.VERCEL) {
+      app.listen(PORT, '0.0.0.0', () => {
+          console.log(`✅ Backend server is listening on all interfaces, port ${PORT}`);
+          console.log(`   - Local:   http://localhost:${PORT}`);
+      });
+    }
 };
 
 initializeAndStartServer();
+
+// Export the app for Vercel
+export default app;

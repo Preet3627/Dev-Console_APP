@@ -22,7 +22,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=your_smtp_username
 SMTP_PASS=your_smtp_password
-SMTP_FROM="Your App Name" <noreply@yourdomain.com>
+SMTP_FROM="Dev-Console" # The "From" name in emails. The email address will be your SMTP_USER.
 `.trim();
 
 interface DatabaseSetupProps {
