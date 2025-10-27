@@ -628,4 +628,4 @@ export const pluginSourceCode = [
   '',
   '// Initialize the plugin.',
   'Dev_Console_Connector::get_instance();',
-].join('\\n');
+].join('\n');

@@ -21,6 +21,7 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
     const [isFullScreen, setIsFullScreen] = useState(false);
     const chatSessionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // New state for queuing prompts and auto-execution
     const [promptQueue, setPromptQueue] = useState<string[]>([]);
@@ -35,6 +36,16 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
 
     useEffect(scrollToBottom, [messages]);
     
+    // Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            // Reset height to auto to allow shrinking
+            textareaRef.current.style.height = 'auto';
+            // Set height to scrollHeight to expand
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+    }, [input]);
+
     // Show shortcut info on first open
     useEffect(() => {
         const isDismissed = localStorage.getItem('dev-console-shortcut-info-dismissed');
@@ -267,12 +278,13 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                     )}
                     <div className={`flex items-center space-x-2 bg-background p-2 border border-border-primary rounded-lg transition-all ${autoExecute ? 'auto-execute-glow' : ''}`}>
                         <textarea
+                            ref={textareaRef}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder={isLoading ? "AI is busy... Add to queue with Ctrl+Enter" : "Ask a question (Ctrl+Enter to send)"}
                             rows={1}
-                            className="flex-grow bg-background focus:outline-none resize-none"
+                            className="flex-grow bg-background focus:outline-none resize-none copilot-textarea"
                         />
                         <button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="p-2 bg-accent-blue rounded-md disabled:opacity-50">
                             <SendIcon className="w-5 h-5" />

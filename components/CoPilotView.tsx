@@ -17,6 +17,7 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
     const [error, setError] = useState<string | null>(null);
     const chatSessionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -24,6 +25,16 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
 
     useEffect(scrollToBottom, [messages]);
     
+    // Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            // Reset height to auto to allow shrinking
+            textareaRef.current.style.height = 'auto';
+            // Set height to scrollHeight to expand
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+    }, [input]);
+
     useEffect(() => {
         if (isAiConfigured()) {
             chatSessionRef.current = createChatSession();
@@ -124,6 +135,13 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
         }
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
+
     return (
         <div className="flex flex-col h-full">
             <h1 className="text-4xl font-bold mb-4">Dev-Console Co-Pilot Chat</h1>
@@ -152,12 +170,13 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
                 <footer className="mt-4">
                     <div className="flex items-center space-x-2 bg-background p-2 border border-border-primary rounded-lg">
                         <textarea
+                            ref={textareaRef}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                            placeholder={isAiConfigured() ? "Ask a question or give an instruction..." : "Please configure Gemini API Key in Settings"}
+                            onKeyDown={handleKeyDown}
+                            placeholder={isAiConfigured() ? "Ask a question... (Ctrl+Enter to send)" : "Please configure Gemini API Key in Settings"}
                             rows={1}
-                            className="flex-grow bg-transparent focus:outline-none resize-none"
+                            className="flex-grow bg-transparent focus:outline-none resize-none copilot-textarea"
                             disabled={isLoading || !isAiConfigured()}
                         />
                         <button onClick={handleSend} disabled={isLoading || !input.trim() || !isAiConfigured()} className="p-2 bg-accent-blue rounded-md disabled:opacity-50">

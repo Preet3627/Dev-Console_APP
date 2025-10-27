@@ -475,3 +475,6 @@ kbd {
     border-width: 0;
 }
 .resize-none { resize: none; }
+.copilot-textarea {
+    max-height: 7.5rem; /* Approx 5 lines of text with padding */
+}
