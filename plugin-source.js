@@ -38,10 +38,17 @@ class Dev_Console_Connector {
     }
 
     private function __construct() {
+        // Actions are now hooked in the init() method to ensure correct loading order.
+    }
+
+    /**
+     * Initializes the plugin by setting up hooks.
+     */
+    public function init() {
+        $this->check_and_create_options();
         add_action('rest_api_init', [$this, 'register_routes']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_filter('rest_pre_serve_request', [$this, 'handle_cors_headers'], 10, 4);
-        add_action('plugins_loaded', [$this, 'check_and_create_options']);
     }
 
     public function check_and_create_options() {
@@ -666,6 +673,14 @@ $results[] = [
 // Use a static method for the activation hook to prevent closure serialization issues.
 register_activation_hook(__FILE__, ['Dev_Console_Connector', 'activate']);
 
-// Initialize the plugin.
-Dev_Console_Connector::get_instance();
+/**
+ * Initializes the plugin instance.
+ *
+ * This function is hooked to 'plugins_loaded' to ensure all WordPress functions and other plugins
+ * have been loaded before our plugin's logic runs.
+ */
+function dev_console_connector_init() {
+    Dev_Console_Connector::get_instance()->init();
+}
+add_action('plugins_loaded', 'dev_console_connector_init');
 `;
