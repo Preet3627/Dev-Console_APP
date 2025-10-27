@@ -343,7 +343,7 @@ class Dev_Console_Connector {
             }
             if ($file->isFile()) { $files[] = ['name' => ltrim(str_replace($base_path, '', $file->getPathname()), '/')]; }
         }
-        usort($files, fn($a, $b) => strcmp($a['name'], $b['name']));
+        usort($files, function($a, $b) { return strcmp($a['name'], $b['name']); });
         return $files;
     }
 
@@ -617,7 +617,14 @@ class Dev_Console_Connector {
 
         $admin_user = get_user_by('login', 'admin');
         $results[] = ['id' => 'default_admin', 'title' => 'Default "admin" User Does Not Exist', 'status' => $admin_user ? 'fail' : 'pass', 'severity' => 'High', 'description' => 'Using the default "admin" username makes brute-force attacks easier.', 'recommendation' => 'Create a new administrator account with a unique username and delete the default "admin" account.'];
-        $results[] = ['id' => 'file_edit', 'title' => 'File Editing is Disabled in wp-admin', 'status' => (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) ? 'pass' : 'warn', 'severity' => 'Medium', 'description' => 'Allowing file editing from the WordPress admin can be a security risk if an admin account is compromised.', 'recommendation' => "Add `define('DISALLOW_FILE_EDIT', true);` to your wp-config.php file."];
+$results[] = [
+    'id' => 'file_edit', 
+    'title' => 'File Editing Status', 
+    'status' => (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) ? 'fail' : 'pass', 
+    'severity' => 'Medium', 
+    'description' => 'File editing must be enabled for the Dev-Console to write to files. If disabled, write operations will fail.', 
+    'recommendation' => "To fix this, set \`define(\'DISALLOW_FILE_EDIT\', false);\` in your wp-config.php file or remove the line defining it."
+];
         $results[] = ['id' => 'db_prefix', 'title' => 'Database Prefix is Not Default', 'status' => ($wpdb->prefix === 'wp_') ? 'fail' : 'pass', 'severity' => 'Medium', 'description' => 'Using the default "wp_" database prefix makes SQL injection attacks easier.', 'recommendation' => 'Use a unique database prefix. This requires a more involved process to change on an existing site.'];
 
         return $results;
@@ -651,7 +658,7 @@ class Dev_Console_Connector {
                 ];
             }
         }
-        usort($backups, fn($a, $b) => $b['date'] - $a['date']);
+        usort($backups, function($a, $b) { return $b['date'] - $a['date']; });
         return $backups;
     }
 }
