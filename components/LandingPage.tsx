@@ -1,6 +1,16 @@
 import React, { useEffect } from 'react';
 import { PM_SHRI_Logo, GenerateIcon, CoPilotIcon, ShieldIcon, SpeedIcon, FileIcon, DatabaseIcon } from './icons/Icons';
 
+// FIX: Add a global declaration for 'window.hljs' to inform TypeScript about the Highlight.js library.
+declare global {
+  interface Window {
+    hljs?: {
+      highlightAll: () => void;
+    };
+  }
+}
+
+
 // Helper for dynamic class names
 const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(' ');
 
@@ -8,11 +18,43 @@ interface LandingPageProps {
   onEnterApp: () => void;
 }
 
+const sampleCode = `
+<?php
+/**
+ * Plugin Name: Simple Contact Form
+ * Description: Adds a contact form using a shortcode.
+ * Version: 1.0
+ * Author: AI Assistant
+ */
+
+function simple_contact_form_shortcode() {
+    ob_start();
+    ?>
+    <form action="" method="post">
+        <p>Your Name (required) <br/>
+        <input type="text" name="cf-name" size="40" required /></p>
+        <p>Your Email (required) <br/>
+        <input type="email" name="cf-email" size="40" required /></p>
+        <p>Message <br/>
+        <textarea rows="10" cols="35" name="cf-message"></textarea></p>
+        <p><input type="submit" name="cf-submitted" value="Send"/></p>
+    </form>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('simple_contact_form', 'simple_contact_form_shortcode');
+`.trim();
+
 const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
     
     useEffect(() => {
         document.body.classList.add('landing-body');
         
+        // Initialize highlight.js
+        if (window.hljs) {
+            window.hljs.highlightAll();
+        }
+
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -81,21 +123,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
     return (
         <div className="relative">
              <header className="landing-header">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-20">
+                <div className="px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center py-4">
                         <div className="flex items-center space-x-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
                             <PM_SHRI_Logo className="h-8 w-8" />
                             <span className="text-xl font-bold tracking-wider">Dev-Console</span>
                         </div>
                         <div className="flex items-center">
-                            <button onClick={onEnterApp} className="btn-primary-landing py-3 px-8 text-sm">Launch Console</button>
+                            <button onClick={onEnterApp} className="btn-primary-landing !py-2 !px-6 text-sm">Launch Console</button>
                         </div>
                     </div>
                 </div>
             </header>
             
             <main className="overflow-x-hidden">
-                <section className="relative pt-48 pb-20 lg:pt-64 lg:pb-24 text-center">
+                <section className="relative flex items-center justify-center min-h-screen text-center">
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
                         <h1 className="animate-on-scroll fade-in-up text-5xl md:text-7xl font-extrabold leading-tight mb-6" style={{ animationDelay: '0.1s' }}>
                             The Command Center for Modern <span className="wordpress-gradient-text">WordPress</span> Development
@@ -109,77 +151,51 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                     </div>
                 </section>
                 
+                <section className="relative py-20 lg:py-32">
+                    <div className="text-center max-w-3xl mx-auto mb-12 animate-on-scroll fade-in-up">
+                        <h2 className="text-4xl md:text-5xl font-bold">Dev-Console Dashboard</h2>
+                        <p className="mt-4 text-lg text-text-secondary">Your entire WordPress workflow, beautifully unified in a single, elegant interface.</p>
+                    </div>
+                    <div className="animate-on-scroll zoom-in" style={{ animationDelay: '0.2s' }}>
+                        <div className="relative max-w-2xl mx-auto">
+                           <img src="https://ponsrischool.in/wp-content/uploads/2025/10/dev.ponsrischool.in_S26-Ultra-scaled.png" alt="Dev-Console Dashboard" className="w-full h-auto shadow-2xl rounded-2xl" />
+                        </div>
+                    </div>
+                </section>
+                
                 <section id="features" className="py-20 lg:py-32">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center max-w-3xl mx-auto mb-16">
                             <h2 className="animate-on-scroll fade-in-up text-4xl md:text-5xl font-bold">A Toolkit for Peak Performance</h2>
                             <p className="animate-on-scroll fade-in-up text-lg text-text-secondary mt-4" style={{ animationDelay: '0.1s' }}>Every feature is designed to eliminate friction and accelerate your creative process.</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-8">
+                        <div className="grid grid-cols-2 gap-8 max-w-5xl mx-auto">
                            {features.map((feature, i) => (
-                                <div key={feature.title} className="animate-on-scroll fade-in-up glass-card-landing p-8 flex flex-col items-start" style={{ transitionDelay: `${(i * 0.1) + 0.1}s` }}>
+                                <div key={feature.title} className="animate-on-scroll fade-in-up glass-card-landing p-6 flex flex-col items-start" style={{ transitionDelay: `${(i * 0.1) + 0.1}s` }}>
                                     <div className="p-3 rounded-lg bg-background inline-block mb-4">
                                         <feature.Icon className={cn("w-8 h-8", colorMap[feature.color])} />
                                     </div>
                                     <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-                                    <p className="text-text-secondary text-sm">{feature.description}</p>
+                                    <p className="text-text-secondary text-sm leading-relaxed">{feature.description}</p>
                                 </div>
                            ))}
                         </div>
                     </div>
                 </section>
 
-                <section id="how-it-works" className="py-20 lg:py-32">
+                <section id="ai-demo" className="py-20 lg:py-32">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center max-w-3xl mx-auto mb-16">
-                            <h2 className="animate-on-scroll fade-in-up text-4xl md:text-5xl font-bold">Three Steps to a Faster Workflow</h2>
-                        </div>
-                        <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                            <div className="absolute top-1/2 left-0 w-full h-px bg-gradient-to-r from-transparent via-border to-transparent -translate-y-1/2 hidden md:block"></div>
-                            <div className="animate-on-scroll fade-in-up" style={{ animationDelay: '0.1s' }}>
-                                <div className="relative inline-block">
-                                    <div className="w-20 h-20 rounded-full bg-background border-2 border-border flex items-center justify-center text-accent-cyan text-2xl font-bold">1</div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 lg:items-center gap-12">
+                            <div className="animate-on-scroll fade-in-up">
+                                <h2 className="text-4xl md:text-5xl font-bold mb-4">Live AI in Action</h2>
+                                <p className="text-lg text-text-secondary mb-6">Simply describe what you need. The AI understands your request, follows best practices, and generates fully functional code, complete with necessary headers and comments.</p>
+                                <div className="glass-card-landing p-6">
+                                    <p className="font-mono text-sm text-accent-cyan">"Generate a simple WordPress plugin that adds a contact form to a page using the shortcode [simple_contact_form]."</p>
                                 </div>
-                                <h3 className="text-xl font-bold mt-6 mb-2">Connect Securely</h3>
-                                <p className="text-text-secondary">Install our lightweight connector plugin on your WordPress site to establish a secure, authenticated link with the console.</p>
                             </div>
-                            <div className="animate-on-scroll fade-in-up" style={{ animationDelay: '0.2s' }}>
-                                <div className="relative inline-block">
-                                    <div className="w-20 h-20 rounded-full bg-background border-2 border-border flex items-center justify-center text-accent-violet text-2xl font-bold">2</div>
-                                </div>
-                                <h3 className="text-xl font-bold mt-6 mb-2">Manage &amp; Analyze</h3>
-                                <p className="text-text-secondary">Use the unified dashboard to manage assets, edit files, and run diagnostics. Let the Co-Pilot handle complex tasks for you.</p>
+                            <div className="animate-on-scroll zoom-in code-block-container" style={{ animationDelay: '0.2s' }}>
+                                <pre><code className="language-php">{sampleCode}</code></pre>
                             </div>
-                             <div className="animate-on-scroll fade-in-up" style={{ animationDelay: '0.3s' }}>
-                                <div className="relative inline-block">
-                                    <div className="w-20 h-20 rounded-full bg-background border-2 border-border flex items-center justify-center text-accent-green text-2xl font-bold">3</div>
-                                </div>
-                                <h3 className="text-xl font-bold mt-6 mb-2">Generate with AI</h3>
-                                <p className="text-text-secondary">Describe your next plugin or theme. The AI generates the code, and you can install it directly to your site with a single click.</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="testimonial" className="py-20 lg:py-32">
-                     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                         <div className="animate-on-scroll zoom-in glass-card-landing p-10 md:p-16 text-center">
-                            <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Testimonial author" className="w-24 h-24 rounded-full mx-auto mb-6 border-4 border-accent-violet/50 shadow-lg"/>
-                            <p className="text-2xl font-medium leading-loose italic text-text-primary mb-6">"This tool has fundamentally changed how we approach WordPress projects. What used to take days now takes minutes. The AI Co-Pilot is like having a senior developer on call 24/7."</p>
-                            <div>
-                                <h4 className="font-bold text-lg text-text-primary">Alex Johnson</h4>
-                                <p className="text-text-secondary">Lead Developer, Digital Agency</p>
-                            </div>
-                         </div>
-                    </div>
-                </section>
-                
-                <section className="py-20 lg:py-32">
-                    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                        <div className="animate-on-scroll fade-in-up">
-                            <h2 className="text-4xl md:text-5xl font-bold mb-4 hero-glow-text">Ready to Revolutionize Your Workflow?</h2>
-                            <p className="text-text-secondary mb-8 max-w-xl mx-auto text-lg">Stop wrestling with repetitive tasks and start creating. Launch the Dev-Console and experience the future of WordPress management.</p>
-                            <button onClick={onEnterApp} className="btn-primary-landing !px-10 !py-4 !text-lg">Launch The Console</button>
                         </div>
                     </div>
                 </section>

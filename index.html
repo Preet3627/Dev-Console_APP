@@ -111,7 +111,7 @@
           background-color: rgba(17, 24, 39, 0.3);
           -webkit-backdrop-filter: blur(32px);
           backdrop-filter: blur(32px);
-          border-radius: 0.75rem;
+          border-radius: 1rem; /* Slightly more rounded */
           border: 1px solid rgba(255, 255, 255, 0.1);
           box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
           transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease-out, border-color 0.4s ease;
@@ -119,6 +119,8 @@
 
       .glass-card-landing:hover {
           border-color: rgba(167, 139, 250, 0.5);
+          transform: translateY(-8px) scale(1.02);
+          box-shadow: 0 20px 50px rgba(0,0,0,0.5);
       }
       
       .scroll-watcher {
@@ -149,6 +151,34 @@
         text-shadow: 0 0 8px rgba(249, 250, 251, 0.3), 0 0 20px rgba(167, 139, 250, 0.3);
       }
       
+      .animate-float {
+        animation: float 6s ease-in-out infinite;
+      }
+      
+      .code-block-container pre {
+        background-color: rgba(30, 30, 30, 0.8) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        max-height: 400px;
+        overflow-y: auto;
+        font-size: 0.8rem;
+      }
+
+      .code-block-container pre::-webkit-scrollbar {
+          width: 8px;
+      }
+      .code-block-container pre::-webkit-scrollbar-track {
+          background: transparent;
+      }
+      .code-block-container pre::-webkit-scrollbar-thumb {
+          background-color: rgba(255, 255, 255, 0.2);
+          border-radius: 10px;
+          border: 2px solid transparent;
+          background-clip: content-box;
+      }
+      
+      .min-h-screen { min-height: 100vh; }
       .font-extrabold { font-weight: 800; }
       .leading-tight { line-height: 1.2; }
       .leading-loose { line-height: 2; }
@@ -170,7 +200,9 @@
       .lg\\:py-32 { @media (min-width: 1024px) { padding-top: 8rem; padding-bottom: 8rem; } }
       .gap-8 { gap: 2rem; }
       .md\\:grid-cols-2 { @media (min-width: 768px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
+      .lg\\:grid-cols-3 { @media (min-width: 1024px) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      .lg\\:items-center { @media (min-width: 1024px) { align-items: center; } }
+      
       @keyframes aurora-pan {
         from { transform: rotate(0deg) translateX(-10%) translateY(-10%); }
         to { transform: rotate(360deg) translateX(-10%) translateY(-10%); }

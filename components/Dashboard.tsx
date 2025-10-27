@@ -1,13 +1,16 @@
 import React from 'react';
-import { GenerateIcon, CoPilotIcon, ShieldIcon, SpeedIcon, ConnectIcon } from './icons/Icons';
+import { GenerateIcon, CoPilotIcon, ShieldIcon, SpeedIcon, ConnectIcon, DownloadIcon } from './icons/Icons';
 
 interface DashboardProps {
     onStartChat: (prompt: string) => void;
     isConnected: boolean;
     onConnect: () => void;
+    needsConnectorUpdate: boolean;
+    onUpdateConnector: () => void;
+    isUpdatingConnector: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onStartChat, isConnected, onConnect }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onStartChat, isConnected, onConnect, needsConnectorUpdate, onUpdateConnector, isUpdatingConnector }) => {
     
     const quickActions = [
         {
@@ -52,6 +55,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onStartChat, isConnected, onConne
             <h1 className="text-4xl font-bold mb-2">Dev-Console Co-Pilot</h1>
             <p className="text-text-secondary text-lg mb-8">Your AI-powered WordPress management suite.</p>
             
+             {needsConnectorUpdate && isConnected && (
+                 <div className="mb-8 p-6 glass-card border-accent-yellow/50 flex items-center justify-between">
+                     <div>
+                         <h2 className="text-xl font-semibold text-accent-yellow">Connector Plugin Update Available</h2>
+                         <p className="text-text-secondary mt-1">Update to get the latest features and security improvements.</p>
+                     </div>
+                     <button onClick={onUpdateConnector} disabled={isUpdatingConnector} className="btn btn-primary flex items-center space-x-2">
+                         <DownloadIcon className="w-4 h-4" />
+                         <span>{isUpdatingConnector ? 'Updating...' : 'Update Now'}</span>
+                     </button>
+                 </div>
+            )}
+
             {!isConnected && (
                  <div className="mb-8 p-6 glass-card border-accent-red/50 flex items-center justify-between">
                      <div>

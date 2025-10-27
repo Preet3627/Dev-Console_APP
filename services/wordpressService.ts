@@ -102,7 +102,7 @@ export const testConnection = async (siteData: SiteData): Promise<any> => {
 
 
 // --- Auth Functions ---
-export const loginUser = async (email: string, password: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, siteData: SiteData | null }> => {
+export const loginUser = async (email: string, password: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, siteData: SiteData | null, displayName: string, profilePictureUrl: string | null }> => {
     const response = await masterApiFetch('/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
@@ -131,7 +131,7 @@ export const resendVerificationCode = async (email: string): Promise<{ success: 
     });
 };
 
-export const signInWithGoogle = async (googleToken: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, siteData: SiteData | null }> => {
+export const signInWithGoogle = async (googleToken: string): Promise<{ token: string, email: string, isAdmin: boolean, settings: AppSettings, siteData: SiteData | null, displayName: string, profilePictureUrl: string | null }> => {
     const response = await masterApiFetch('/google-signin', {
         method: 'POST',
         body: JSON.stringify({ token: googleToken }),
@@ -161,6 +161,14 @@ export const saveAppSettings = async (settings: AppSettings): Promise<void> => {
         body: JSON.stringify(settings),
     });
 };
+
+export const saveUserProfile = async (profile: { displayName: string, profilePictureUrl?: string }): Promise<{ success: boolean }> => {
+    return masterApiFetch('/profile', {
+        method: 'POST',
+        body: JSON.stringify(profile),
+    });
+};
+
 
 export const getEncryptedSiteData = async (): Promise<SiteData | null> => {
     try {

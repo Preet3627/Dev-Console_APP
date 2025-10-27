@@ -27,7 +27,7 @@ import BackendStatusView from './components/BackendStatusView';
 import LandingPage from './LandingPage';
 
 import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';
-import { getEncryptedSiteData, testConnection, getBackendStatus, getPublicConfig } from './services/wordpressService';
+import { getEncryptedSiteData, testConnection, getBackendStatus, getPublicConfig, getLatestConnectorPlugin, updateConnectorPlugin } from './services/wordpressService';
 import { SiteData, AppSettings, Asset, AssetFile, AssetType } from './types';
 import FloatingCoPilotButton from './components/FloatingCoPilotButton';
 
@@ -57,6 +57,16 @@ const App: React.FC = () => {
     const [toast, setToast] = useState<Toast | null>(null);
     const [appStatus, setAppStatus] = useState<AppStatus>('loading');
     const [setupError, setSetupError] = useState('');
+
+    const [displayName, setDisplayName] = useState('');
+    const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
+
+    // Connector update state moved to App level
+    const [connectorVersion, setConnectorVersion] = useState<string | null>(null);
+    const [latestConnectorVersion, setLatestConnectorVersion] = useState<string | null>(null);
+    const [isCheckingVersions, setIsCheckingVersions] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [updateStatus, setUpdateStatus] = useState('');
 
     const checkBackendStatus = useCallback(async () => {
         setAppStatus('loading');
@@ -102,13 +112,18 @@ const App: React.FC = () => {
         }
     }, [toast]);
 
-    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, siteData?: SiteData | null }) => {
+    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, siteData?: SiteData | null, displayName?: string, profilePictureUrl?: string | null }) => {
         setSecureItem('authToken', data.token);
         setSecureItem('userEmail', data.email);
         setSecureItem('isAdmin', data.isAdmin);
         setSecureItem('appSettings', data.settings);
+        setSecureItem('displayName', data.displayName || '');
+        setSecureItem('profilePictureUrl', data.profilePictureUrl || null);
+
         setIsAdmin(data.isAdmin);
         setIsLoggedIn(true);
+        setDisplayName(data.displayName || '');
+        setProfilePictureUrl(data.profilePictureUrl || null);
 
         if (data.siteData) {
             setSiteData(data.siteData);
@@ -124,10 +139,14 @@ const App: React.FC = () => {
         removeSecureItem('authToken');
         removeSecureItem('userEmail');
         removeSecureItem('isAdmin');
-        // Keep app settings but clear site-specific data
         removeSecureItem('siteData');
+        removeSecureItem('displayName');
+        removeSecureItem('profilePictureUrl');
+        
         setIsLoggedIn(false);
         setSiteData(null);
+        setDisplayName('');
+        setProfilePictureUrl(null);
         setCurrentView('dashboard');
         setAuthView('login');
         setCurrentAppView('landing');
@@ -147,6 +166,56 @@ const App: React.FC = () => {
         }
     }, []);
 
+    const handleUpdateConnector = useCallback(async () => {
+        if (!siteData) return;
+        setIsUpdating(true);
+        setUpdateStatus('Updating connector plugin on your WordPress site...');
+        try {
+            const latestPluginData = await getLatestConnectorPlugin();
+            await updateConnectorPlugin(siteData, latestPluginData.source);
+            setConnectorVersion(latestPluginData.version); // Optimistically update UI
+            setToast({ message: '✅ Connector updated successfully!', type: 'success'});
+            setUpdateStatus('Connector updated successfully!');
+        } catch (e) {
+            const errorMsg = `Update failed: ${(e as Error).message}`;
+            setToast({ message: `❌ ${errorMsg}`, type: 'error'});
+            setUpdateStatus(errorMsg);
+        } finally {
+            setIsUpdating(false);
+            setTimeout(() => setUpdateStatus(''), 5000);
+        }
+    }, [siteData]);
+
+    // Effect to check connector version
+    useEffect(() => {
+        const checkVersions = async () => {
+            if (!siteData) return;
+            setIsCheckingVersions(true);
+            setUpdateStatus('');
+            try {
+                const pingResponse = await testConnection(siteData);
+                const installed = pingResponse.connector_version || 'Unknown';
+                setConnectorVersion(installed);
+
+                const latestPluginData = await getLatestConnectorPlugin();
+                const latest = latestPluginData.version || 'Unknown';
+                setLatestConnectorVersion(latest);
+                
+                const settings = getSecureItem<AppSettings>('appSettings') || {};
+                if (settings.autoUpdateConnector && installed !== latest && installed !== 'Unknown' && latest !== 'Unknown') {
+                    await handleUpdateConnector();
+                }
+
+            } catch (e) {
+                console.error("Failed to check connector versions", e);
+                setUpdateStatus('Could not verify connector version.');
+            } finally {
+                setIsCheckingVersions(false);
+            }
+        };
+        checkVersions();
+    }, [siteData, handleUpdateConnector]);
+
     useEffect(() => {
         const initializeApp = async () => {
             await loadInitialConfig();
@@ -159,6 +228,8 @@ const App: React.FC = () => {
             if (token) {
                 setIsLoggedIn(true);
                 setIsAdmin(!!adminStatus);
+                setDisplayName(getSecureItem('displayName') || '');
+                setProfilePictureUrl(getSecureItem('profilePictureUrl'));
                 loadSiteData();
             }
         };
@@ -217,6 +288,13 @@ const App: React.FC = () => {
     const handleEnterApp = () => {
         setCurrentAppView('main_app');
     };
+    
+    const handleProfileUpdate = () => {
+        setDisplayName(getSecureItem('displayName') || '');
+        setProfilePictureUrl(getSecureItem('profilePictureUrl'));
+    };
+    
+    const needsUpdate = !!(connectorVersion && latestConnectorVersion && connectorVersion !== 'Unknown' && latestConnectorVersion !== 'Unknown' && connectorVersion < latestConnectorVersion);
 
     if (currentAppView === 'landing') {
         return <LandingPage onEnterApp={handleEnterApp} />;
@@ -235,7 +313,7 @@ const App: React.FC = () => {
 
         switch (currentView) {
             case 'dashboard':
-                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} />;
+                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} needsConnectorUpdate={needsUpdate} onUpdateConnector={handleUpdateConnector} isUpdatingConnector={isUpdating} />;
             case 'plugins':
                 return <AssetManager siteData={siteData!} assetType={AssetType.Plugin} onEditAsset={handleEditAsset} />;
             case 'themes':
@@ -261,9 +339,9 @@ const App: React.FC = () => {
             case 'backendStatus':
                 return <BackendStatusView />;
             case 'settings':
-                return <Settings siteData={siteData} onDisconnect={handleLogout} />;
+                return <Settings siteData={siteData} onDisconnect={handleLogout} onProfileUpdate={handleProfileUpdate} connectorVersionInfo={{ connectorVersion, latestConnectorVersion, isCheckingVersions, isUpdating, updateStatus }} onUpdateConnector={handleUpdateConnector}/>;
             default:
-                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} />;
+                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} needsConnectorUpdate={needsUpdate} onUpdateConnector={handleUpdateConnector} isUpdatingConnector={isUpdating} />;
         }
     };
     
@@ -303,6 +381,10 @@ const App: React.FC = () => {
                     onConnect={() => setShowConnectorModal(true)} 
                     onRefresh={loadSiteData}
                     onTestConnection={handleTestConnection}
+                    displayName={displayName}
+                    profilePictureUrl={profilePictureUrl}
+                    onLogout={handleLogout}
+                    setView={setCurrentView}
                 />
                 <main className="flex-1 overflow-y-auto p-8">
                     {renderView()}
@@ -317,7 +399,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* FIX: Changed prop 'onConnect' to 'onSiteAdded' to match the component's definition and resolve a type error. */}
             {showConnectorModal && <ConnectorSetupModal onClose={() => setShowConnectorModal(false)} onSiteAdded={handleConnect} />}
             {showCoPilotModal && <CoPilot onClose={() => setShowCoPilotModal(false)} siteData={siteData} initialPrompt={coPilotInitialPrompt} modalBgColor={modalBgColor} />}
             {showEditor && assetToEdit && <CodeEditor siteData={siteData!} asset={assetToEdit} initialFile={fileToEdit || undefined} onClose={() => setShowEditor(false)} modalBgColor={modalBgColor} />}

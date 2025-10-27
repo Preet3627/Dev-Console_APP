@@ -1,80 +1,47 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getSecureItem, setSecureItem } from '../utils/secureLocalStorage';
 import { AppSettings, SiteData } from '../types';
-import { saveAppSettings, testConnection, getLatestConnectorPlugin, updateConnectorPlugin } from '../services/wordpressService';
+import { saveAppSettings, saveUserProfile } from '../services/wordpressService';
 import { verifyConnection as verifyNextcloudConnection } from '../services/nextcloudService';
 import { getGoogleApiToken } from '../services/googleAuthService';
 
 interface SettingsProps {
     onDisconnect: () => void;
     siteData: SiteData | null;
+    onProfileUpdate: () => void;
+    connectorVersionInfo: {
+        connectorVersion: string | null;
+        latestConnectorVersion: string | null;
+        isCheckingVersions: boolean;
+        isUpdating: boolean;
+        updateStatus: string;
+    };
+    onUpdateConnector: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData }) => {
+const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData, onProfileUpdate, connectorVersionInfo, onUpdateConnector }) => {
     const [settings, setSettings] = useState<AppSettings>({});
     const [saveMessage, setSaveMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showKeys, setShowKeys] = useState(false);
     
+    // User profile state
+    const [displayName, setDisplayName] = useState('');
+    const [profilePictureUrl, setProfilePictureUrl] = useState('');
+    const [profileSaveMessage, setProfileSaveMessage] = useState('');
+
     // Cloud connection statuses
     const [nextcloudStatus, setNextcloudStatus] = useState('');
     const [googleDriveStatus, setGoogleDriveStatus] = useState('');
 
-    // Connector update states
-    const [connectorVersion, setConnectorVersion] = useState<string | null>(null);
-    const [latestConnectorVersion, setLatestConnectorVersion] = useState<string | null>(null);
-    const [isCheckingVersions, setIsCheckingVersions] = useState(false);
-    const [isUpdating, setIsUpdating] = useState(false);
-    const [updateStatus, setUpdateStatus] = useState('');
-
-    const handleUpdateConnector = useCallback(async () => {
-        if (!siteData) return;
-        setIsUpdating(true);
-        setUpdateStatus('Updating...');
-        try {
-            const latestPluginData = await getLatestConnectorPlugin();
-            await updateConnectorPlugin(siteData, latestPluginData.source);
-            setConnectorVersion(latestPluginData.version); // Optimistically update UI
-            setUpdateStatus('Connector updated successfully!');
-        } catch (e) {
-            setUpdateStatus(`Update failed: ${(e as Error).message}`);
-        } finally {
-            setIsUpdating(false);
-            setTimeout(() => setUpdateStatus(''), 5000);
-        }
-    }, [siteData]);
+    const { connectorVersion, latestConnectorVersion, isCheckingVersions, isUpdating, updateStatus } = connectorVersionInfo;
     
     useEffect(() => {
         const loadedSettings = getSecureItem<AppSettings>('appSettings') || {};
         setSettings(loadedSettings);
-        
-        const checkVersions = async () => {
-            if (!siteData) return;
-            setIsCheckingVersions(true);
-            setUpdateStatus('');
-            try {
-                const pingResponse = await testConnection(siteData);
-                const installed = pingResponse.connector_version || '0.0.0';
-                setConnectorVersion(installed);
-
-                const latestPluginData = await getLatestConnectorPlugin();
-                const latest = latestPluginData.version || '0.0.0';
-                setLatestConnectorVersion(latest);
-                
-                if (loadedSettings.autoUpdateConnector && installed !== latest && installed !== 'Unknown' && latest !== 'Unknown') {
-                    await handleUpdateConnector();
-                }
-
-            } catch (e) {
-                console.error("Failed to check connector versions", e);
-                setUpdateStatus('Could not verify connector version.');
-            } finally {
-                setIsCheckingVersions(false);
-            }
-        };
-
-        checkVersions();
-    }, [siteData, handleUpdateConnector]);
+        setDisplayName(getSecureItem('displayName') || '');
+        setProfilePictureUrl(getSecureItem('profilePictureUrl') || '');
+    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -114,6 +81,23 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData }) => {
         }
     };
     
+    const handleProfileSave = async () => {
+        setIsLoading(true);
+        setProfileSaveMessage('');
+        try {
+            await saveUserProfile({ displayName, profilePictureUrl });
+            setSecureItem('displayName', displayName);
+            setSecureItem('profilePictureUrl', profilePictureUrl);
+            onProfileUpdate();
+            setProfileSaveMessage('Profile saved successfully!');
+             setTimeout(() => setProfileSaveMessage(''), 3000);
+        } catch (error) {
+            setProfileSaveMessage(`Error saving profile: ${(error as Error).message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleTestNextcloud = async () => {
         setNextcloudStatus('Testing connection...');
         try {
@@ -139,6 +123,26 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData }) => {
             <h1 className="text-4xl font-bold mb-8">Settings</h1>
             
             <div className="max-w-3xl space-y-8">
+                <div className="glass-card p-6">
+                    <h2 className="text-xl font-semibold mb-4">User Profile</h2>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-text-primary">Display Name</label>
+                            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="input-field mt-1" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-text-primary">Profile Picture URL</label>
+                            <input type="text" value={profilePictureUrl} onChange={(e) => setProfilePictureUrl(e.target.value)} className="input-field mt-1" placeholder="https://example.com/avatar.png" />
+                        </div>
+                    </div>
+                     <div className="flex justify-end items-center mt-4">
+                        {profileSaveMessage && <p className={`text-sm mr-4 ${profileSaveMessage.startsWith('Error') ? 'text-accent-red' : 'text-accent-green'}`}>{profileSaveMessage}</p>}
+                        <button onClick={handleProfileSave} className="btn btn-primary" disabled={isLoading}>
+                            {isLoading ? 'Saving...' : 'Save Profile'}
+                        </button>
+                    </div>
+                </div>
+
                 {siteData && (
                     <div className="glass-card p-6">
                         <h2 className="text-xl font-semibold mb-4">Connector Plugin Management</h2>
@@ -157,7 +161,7 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData }) => {
                                 <input id="auto-update-toggle" type="checkbox" name="autoUpdateConnector" checked={settings.autoUpdateConnector || false} onChange={handleCheckboxChange} className="h-4 w-4 rounded border-gray-300 text-accent-blue focus:ring-accent-blue" />
                                 <label htmlFor="auto-update-toggle" className="text-sm font-medium text-text-secondary">Auto-update plugin</label>
                             </div>
-                            <button onClick={handleUpdateConnector} disabled={isUpdating || isCheckingVersions || connectorVersion === latestConnectorVersion} className="btn btn-secondary disabled:opacity-50">
+                            <button onClick={onUpdateConnector} disabled={isUpdating || isCheckingVersions || connectorVersion === latestConnectorVersion} className="btn btn-secondary disabled:opacity-50">
                                 {isUpdating ? 'Updating...' : 'Update Now'}
                             </button>
                         </div>
@@ -299,7 +303,7 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData }) => {
                 <div className="glass-card p-6">
                     <div className="flex justify-between items-center">
                          <div>
-                            <h2 className="text-xl font-semibold">Save All Settings</h2>
+                            <h2 className="text-xl font-semibold">Save App & API Settings</h2>
                             <p className="text-text-secondary text-sm mt-1">
                                 Your application settings are securely saved to your user account.
                             </p>

@@ -125,6 +125,8 @@ const createTables = async (connection) => {
             id INT AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(255) UNIQUE NOT NULL,
             password_hash VARCHAR(255),
+            display_name VARCHAR(255),
+            profile_picture_url TEXT,
             is_verified BOOLEAN DEFAULT false,
             is_admin BOOLEAN DEFAULT false,
             verification_code VARCHAR(10),
@@ -201,10 +203,10 @@ const seedAdminUser = async () => {
                 console.log(`*** Generated Pass:  ${adminPassword} (set ADMIN_PASSWORD to control this)`);
                 console.log('**************************************************************');
             }
-
+            const displayName = adminEmail.split('@')[0];
             const [insertResult] = await connection.query(
-                'INSERT INTO users (email, password_hash, is_verified, is_admin) VALUES (?, ?, ?, ?)',
-                [adminEmail, password_hash, true, true]
+                'INSERT INTO users (email, password_hash, display_name, is_verified, is_admin) VALUES (?, ?, ?, ?, ?)',
+                [adminEmail, password_hash, displayName, true, true]
             );
             const adminUserId = insertResult.insertId;
 
@@ -289,10 +291,11 @@ apiV1Router.post('/register', async (req, res) => {
 
         const password_hash = await bcrypt.hash(password, 10);
         const verification_code = generateVerificationCode();
+        const displayName = email.split('@')[0];
         
         await connection.query(
-            'INSERT INTO users (email, password_hash, verification_code) VALUES (?, ?, ?)',
-            [email, password_hash, verification_code]
+            'INSERT INTO users (email, password_hash, verification_code, display_name) VALUES (?, ?, ?, ?)',
+            [email, password_hash, verification_code, displayName]
         );
 
         await sendVerificationEmail(email, verification_code);
@@ -346,7 +349,15 @@ apiV1Router.post('/login', async (req, res) => {
 
         const token = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
 
-        res.json({ token, email: user.email, isAdmin: !!user.is_admin, settings, sites });
+        res.json({ 
+            token, 
+            email: user.email, 
+            isAdmin: !!user.is_admin, 
+            settings, 
+            sites,
+            displayName: user.display_name,
+            profilePictureUrl: user.profile_picture_url
+        });
 
     } catch (error) {
         console.error('Login error:', error);
@@ -417,7 +428,7 @@ apiV1Router.post('/google-signin', async (req, res) => {
             audience: GOOGLE_CLIENT_ID,
         });
         const payload = ticket.getPayload();
-        const { sub: google_id, email, email_verified } = payload;
+        const { sub: google_id, email, email_verified, name, picture } = payload;
 
         if (!email_verified) {
             return res.status(400).json({ message: 'Google account is not verified.' });
@@ -433,18 +444,40 @@ apiV1Router.post('/google-signin', async (req, res) => {
 
             if (users.length > 0) {
                 user = users[0];
+                let fieldsToUpdate = [];
+                let params = [];
                 if (!user.google_id) {
-                    await connection.query('UPDATE users SET google_id = ?, is_verified = true WHERE id = ?', [google_id, user.id]);
+                    fieldsToUpdate.push('google_id = ?', 'is_verified = ?');
+                    params.push(google_id, true);
                 }
+                if (!user.display_name && name) {
+                    fieldsToUpdate.push('display_name = ?');
+                    params.push(name);
+                }
+                if (!user.profile_picture_url && picture) {
+                    fieldsToUpdate.push('profile_picture_url = ?');
+                    params.push(picture);
+                }
+
+                if (fieldsToUpdate.length > 0) {
+                    params.push(user.id);
+                    await connection.query(`UPDATE users SET ${fieldsToUpdate.join(', ')} WHERE id = ?`, params);
+                }
+
             } else {
                 isNewUser = true;
+                const displayName = name || email.split('@')[0];
                 const [result] = await connection.query(
-                    'INSERT INTO users (email, is_verified, is_admin, google_id) VALUES (?, ?, ?, ?)',
-                    [email, true, false, google_id]
+                    'INSERT INTO users (email, display_name, profile_picture_url, is_verified, is_admin, google_id) VALUES (?, ?, ?, ?, ?, ?)',
+                    [email, displayName, picture, true, false, google_id]
                 );
                 const [insertedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
                 user = insertedUsers[0];
             }
+
+            // Refresh user data after potential updates
+            const [refreshedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [user.id]);
+            user = refreshedUsers[0];
 
             const [settingsRows] = await connection.query('SELECT settings_json FROM app_settings WHERE user_id = ?', [user.id]);
             let settings = settingsRows.length > 0 ? JSON.parse(settingsRows[0].settings_json) : {};
@@ -457,7 +490,6 @@ apiV1Router.post('/google-signin', async (req, res) => {
                  await connection.query('INSERT INTO app_settings (user_id, settings_json) VALUES (?, ?)', [user.id, JSON.stringify(settings)]);
             }
 
-            // FIX: Always inject the server's current Google Client ID into the settings object.
             settings.googleClientId = process.env.GOOGLE_CLIENT_ID;
 
             const [sitesRows] = await connection.query('SELECT id, name, site_data_encrypted FROM user_sites WHERE user_id = ?', [user.id]);
@@ -466,14 +498,26 @@ apiV1Router.post('/google-signin', async (req, res) => {
             await connection.commit();
             
             const jwtToken = jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1d' });
-            res.json({ token: jwtToken, email: user.email, isAdmin: !!user.is_admin, settings, sites });
+            res.json({ 
+                token: jwtToken, 
+                email: user.email, 
+                isAdmin: !!user.is_admin, 
+                settings, 
+                sites,
+                displayName: user.display_name,
+                profilePictureUrl: user.profile_picture_url
+            });
         } catch (innerError) {
             await connection.rollback();
             throw innerError;
         }
     } catch (error) {
         console.error('Google Sign-In error:', error);
-        res.status(401).json({ message: 'Google Sign-In failed. Invalid token.' });
+        if (error.message && error.message.toLowerCase().includes('audience')) {
+             res.status(401).json({ message: 'Google Sign-In failed. Audience mismatch. Check your Google Client ID configuration.' });
+        } else {
+            res.status(401).json({ message: 'Google Sign-In failed. The provided token is invalid or expired.' });
+        }
     } finally {
         if (connection) await connection.end();
     }
@@ -546,6 +590,31 @@ apiV1Router.post('/settings', authenticateToken, async (req, res) => {
         if (connection) await connection.end();
     }
 });
+
+apiV1Router.post('/profile', authenticateToken, async (req, res) => {
+    if (!isDbConfigured) return res.status(503).json({ message: 'Database not configured.' });
+    const { displayName, profilePictureUrl } = req.body;
+
+    if (!displayName || displayName.trim().length === 0) {
+        return res.status(400).json({ message: 'Display name cannot be empty.' });
+    }
+
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        await connection.query(
+            'UPDATE users SET display_name = ?, profile_picture_url = ? WHERE id = ?',
+            [displayName, profilePictureUrl, req.user.id]
+        );
+        res.json({ success: true, message: 'Profile updated successfully.' });
+    } catch (error) {
+        console.error('Profile update error:', error);
+        res.status(500).json({ message: 'Failed to update profile.' });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
+
 
 // --- PLUGIN UPDATER ---
 apiV1Router.get('/connector-plugin/latest', authenticateToken, (req, res) => {
