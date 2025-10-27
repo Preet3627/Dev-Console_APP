@@ -320,6 +320,7 @@ kbd {
 .mt-8 { margin-top: 2rem; }
 .mt-12 { margin-top: 3rem; }
 .mt-auto { margin-top: auto; }
+.my-1 { margin-top: 0.25rem; margin-bottom: 0.25rem; }
 .mx-auto { margin-left: auto; margin-right: auto; }
 .space-x-2 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.5rem; }
 .space-x-3 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.75rem; }
@@ -394,6 +395,7 @@ kbd {
 .text-accent-yellow { color: #facc15; }
 .bg-accent-yellow\\/20 { background-color: rgba(250, 204, 21, 0.2); }
 .bg-accent-blue { background-color: #3b82f6; }
+.bg-accent-blue\\/20 { background-color: rgba(59, 130, 246, 0.2); }
 .text-accent-blue { color: #3b82f6; }
 .hover\\:bg-accent-blue-hover:hover { background-color: #60a5fa; }
 .text-accent-cyan { color: #22d3ee; }
@@ -403,6 +405,7 @@ kbd {
 .border-border-primary { border-color: #374151; }
 .divide-border-primary > :not([hidden]) ~ :not([hidden]) { border-top-color: #374151; }
 .hover\\:bg-border-primary:hover { background-color: #374151; }
+.hover\\:text-text-primary:hover { color: #f9fafb; }
 .backdrop-blur-sm { backdrop-filter: blur(8px); }
 .backdrop-blur-lg { backdrop-filter: blur(24px); }
 
@@ -432,9 +435,11 @@ kbd {
 /* Effects & Transitions */
 .shadow-lg { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
 .shadow-2xl { box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); }
+.shadow-glow-cyan { box-shadow: 0 0 15px 0px rgba(34, 211, 238, 0.4); }
 .overflow-hidden { overflow: hidden; }
 .overflow-y-auto { overflow-y: auto; }
 .overflow-x-auto { overflow-x: auto; }
+.transition-colors { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
 .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
 .duration-300 { transition-duration: 300ms; }
 .transform { transform: translate(0, 0) rotate(0) skewX(0) skewY(0) scaleX(1) scaleY(1); }

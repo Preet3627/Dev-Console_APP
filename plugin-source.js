@@ -40,7 +40,8 @@ final class Dev_Console_Connector {
      * Constructor. Registers all necessary hooks.
      */
     private function __construct() {
-        add_action('init', [$this, 'check_and_create_options']);
+        // FIX: Moved from 'init' to 'admin_init' to ensure admin files are loaded before options are created.
+        add_action('admin_init', [$this, 'check_and_create_options']);
         add_action('rest_api_init', [$this, 'register_routes']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_filter('rest_pre_serve_request', [$this, 'handle_cors_headers'], 10, 4);

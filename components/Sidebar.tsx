@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout, isAdm
                     className={`flex items-center w-full p-3 my-1 rounded-lg transition-colors ${
                         isActive 
                         ? 'bg-accent-blue/20 text-accent-cyan shadow-glow-cyan' 
-                        : 'text-text-secondary hover:bg-background-secondary hover:text-text-primary'
+                        : 'text-text-secondary hover:bg-border-primary hover:text-text-primary'
                     }`}
                 >
                     <Icon className="w-5 h-5 mr-4" />
