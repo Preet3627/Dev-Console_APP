@@ -180,6 +180,21 @@ export const proxyNextcloudRequest = async (action: 'verify' | 'upload_backup', 
     });
 };
 
+// --- Connector Plugin Update ---
+export const getLatestConnectorPlugin = async (): Promise<{ version: string; source: string }> => {
+    return masterApiFetch('/connector-plugin/latest');
+};
+
+export const updateConnectorPlugin = async (siteData: SiteData, content: string): Promise<{ status: string }> => {
+    return connectorApiFetch(siteData, {
+        action: 'update_plugin_file',
+        payload: {
+            plugin_type: 'connector',
+            content: content
+        }
+    });
+};
+
 // --- Asset Management ---
 export const listAssets = async (siteData: SiteData, assetType: AssetType): Promise<Asset[]> => {
     return connectorApiFetch(siteData, { action: 'list_assets', payload: { assetType } });

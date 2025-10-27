@@ -1,28 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getSecureItem, setSecureItem } from '../utils/secureLocalStorage';
 import { AppSettings, SiteData } from '../types';
-import { saveAppSettings } from '../services/wordpressService';
+import { saveAppSettings, testConnection, getLatestConnectorPlugin, updateConnectorPlugin } from '../services/wordpressService';
 import { verifyConnection as verifyNextcloudConnection } from '../services/nextcloudService';
 import { getGoogleApiToken } from '../services/googleAuthService';
 
 interface SettingsProps {
     onDisconnect: () => void;
+    siteData: SiteData | null;
 }
 
-const Settings: React.FC<SettingsProps> = ({ onDisconnect }) => {
+const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData }) => {
     const [settings, setSettings] = useState<AppSettings>({});
     const [saveMessage, setSaveMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showKeys, setShowKeys] = useState(false);
+    
+    // Cloud connection statuses
     const [nextcloudStatus, setNextcloudStatus] = useState('');
     const [googleDriveStatus, setGoogleDriveStatus] = useState('');
 
-    useEffect(() => {
-        const loadedSettings = getSecureItem<AppSettings>('appSettings');
-        if (loadedSettings) {
-            setSettings(loadedSettings);
+    // Connector update states
+    const [connectorVersion, setConnectorVersion] = useState<string | null>(null);
+    const [latestConnectorVersion, setLatestConnectorVersion] = useState<string | null>(null);
+    const [isCheckingVersions, setIsCheckingVersions] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [updateStatus, setUpdateStatus] = useState('');
+
+    const handleUpdateConnector = useCallback(async () => {
+        if (!siteData) return;
+        setIsUpdating(true);
+        setUpdateStatus('Updating...');
+        try {
+            const latestPluginData = await getLatestConnectorPlugin();
+            await updateConnectorPlugin(siteData, latestPluginData.source);
+            setConnectorVersion(latestPluginData.version); // Optimistically update UI
+            setUpdateStatus('Connector updated successfully!');
+        } catch (e) {
+            setUpdateStatus(`Update failed: ${(e as Error).message}`);
+        } finally {
+            setIsUpdating(false);
+            setTimeout(() => setUpdateStatus(''), 5000);
         }
-    }, []);
+    }, [siteData]);
+    
+    useEffect(() => {
+        const loadedSettings = getSecureItem<AppSettings>('appSettings') || {};
+        setSettings(loadedSettings);
+        
+        const checkVersions = async () => {
+            if (!siteData) return;
+            setIsCheckingVersions(true);
+            setUpdateStatus('');
+            try {
+                const pingResponse = await testConnection(siteData);
+                const installed = pingResponse.connector_version || '0.0.0';
+                setConnectorVersion(installed);
+
+                const latestPluginData = await getLatestConnectorPlugin();
+                const latest = latestPluginData.version || '0.0.0';
+                setLatestConnectorVersion(latest);
+                
+                if (loadedSettings.autoUpdateConnector && installed !== latest && installed !== 'Unknown' && latest !== 'Unknown') {
+                    await handleUpdateConnector();
+                }
+
+            } catch (e) {
+                console.error("Failed to check connector versions", e);
+                setUpdateStatus('Could not verify connector version.');
+            } finally {
+                setIsCheckingVersions(false);
+            }
+        };
+
+        checkVersions();
+    }, [siteData, handleUpdateConnector]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -87,6 +139,32 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect }) => {
             <h1 className="text-4xl font-bold mb-8">Settings</h1>
             
             <div className="max-w-3xl space-y-8">
+                {siteData && (
+                    <div className="glass-card p-6">
+                        <h2 className="text-xl font-semibold mb-4">Connector Plugin Management</h2>
+                        <div className="space-y-3 text-sm">
+                            <div className="flex justify-between items-center">
+                                <span className="text-text-secondary">Installed Version:</span>
+                                <span>{isCheckingVersions ? 'Checking...' : connectorVersion || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-text-secondary">Latest Version:</span>
+                                <span>{isCheckingVersions ? 'Checking...' : latestConnectorVersion || 'N/A'}</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center mt-4 pt-4 border-t border-border-primary">
+                             <div className="flex items-center space-x-2">
+                                <input id="auto-update-toggle" type="checkbox" name="autoUpdateConnector" checked={settings.autoUpdateConnector || false} onChange={handleCheckboxChange} className="h-4 w-4 rounded border-gray-300 text-accent-blue focus:ring-accent-blue" />
+                                <label htmlFor="auto-update-toggle" className="text-sm font-medium text-text-secondary">Auto-update plugin</label>
+                            </div>
+                            <button onClick={handleUpdateConnector} disabled={isUpdating || isCheckingVersions || connectorVersion === latestConnectorVersion} className="btn btn-secondary disabled:opacity-50">
+                                {isUpdating ? 'Updating...' : 'Update Now'}
+                            </button>
+                        </div>
+                        {updateStatus && <p className="text-xs mt-3 text-center">{updateStatus}</p>}
+                    </div>
+                )}
+
                 <div className="glass-card p-6">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-semibold">API Keys & AI Configuration</h2>
@@ -117,19 +195,56 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect }) => {
                         <div>
                             <label className="block text-sm font-medium text-text-primary">Google Gemini API Key</label>
                             <input type={showKeys ? 'text' : 'password'} name="geminiApiKey" value={settings.geminiApiKey || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="Enter your Gemini API Key"/>
-                             <input type="text" name="geminiModel" value={settings.geminiModel || ''} onChange={handleInputChange} className="input-field mt-2 text-sm" placeholder="Model name (e.g., gemini-2.5-flash)"/>
+                            <label className="block text-xs font-medium text-text-secondary mt-2">Gemini Model (for powerful tasks)</label>
+                            <select name="geminiModel" value={settings.geminiModel || 'gemini-2.5-pro'} onChange={handleInputChange} className="input-field mt-1 !py-2 text-sm">
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Most Capable)</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Efficient)</option>
+                                <option value="gemini-flash-latest">Gemini Flash Latest</option>
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-text-primary">OpenAI API Key</label>
                             <input type={showKeys ? 'text' : 'password'} name="openAiApiKey" value={settings.openAiApiKey || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="Enter your OpenAI API Key" />
-                            <input type="text" name="openAiModel" value={settings.openAiModel || ''} onChange={handleInputChange} className="input-field mt-2 text-sm" placeholder="Model name (e.g., gpt-4o)"/>
+                             <label className="block text-xs font-medium text-text-secondary mt-2">OpenAI Model</label>
+                            <select name="openAiModel" value={settings.openAiModel || 'gpt-4o'} onChange={handleInputChange} className="input-field mt-1 !py-2 text-sm">
+                                <option value="gpt-4o">GPT-4o (Latest)</option>
+                                <option value="gpt-4o-mini">GPT-4o Mini (Fast & Affordable)</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-text-primary">Anthropic Claude API Key</label>
                             <input type={showKeys ? 'text' : 'password'} name="claudeApiKey" value={settings.claudeApiKey || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="Enter your Claude API Key" />
-                             <input type="text" name="claudeModel" value={settings.claudeModel || ''} onChange={handleInputChange} className="input-field mt-2 text-sm" placeholder="Model name (e.g., claude-3-haiku-20240307)"/>
+                            <label className="block text-xs font-medium text-text-secondary mt-2">Claude Model</label>
+                            <select name="claudeModel" value={settings.claudeModel || 'claude-3-sonnet-20240229'} onChange={handleInputChange} className="input-field mt-1 !py-2 text-sm">
+                                <option value="claude-3-opus-20240229">Claude 3 Opus (Most Powerful)</option>
+                                <option value="claude-3-sonnet-20240229">Claude 3 Sonnet (Balanced)</option>
+                                <option value="claude-3-haiku-20240307">Claude 3 Haiku (Fastest)</option>
+                            </select>
                         </div>
-                         <hr className="border-border"/>
+                        <hr className="border-border"/>
+                        <div>
+                            <label className="block text-sm font-medium text-text-primary">Groq API Key</label>
+                            <input type={showKeys ? 'text' : 'password'} name="groqApiKey" value={settings.groqApiKey || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="Enter your Groq API Key" />
+                            <label className="block text-xs font-medium text-text-secondary mt-2">Groq Model</label>
+                            <select name="groqModel" value={settings.groqModel || 'llama3-70b-8192'} onChange={handleInputChange} className="input-field mt-1 !py-2 text-sm">
+                                <option value="llama3-70b-8192">Llama3 70b</option>
+                                <option value="llama3-8b-8192">Llama3 8b</option>
+                                <option value="mixtral-8x7b-32768">Mixtral 8x7b</option>
+                                <option value="gemma-7b-it">Gemma 7b</option>
+                            </select>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-text-primary">Perplexity API Key</label>
+                            <input type={showKeys ? 'text' : 'password'} name="perplexityApiKey" value={settings.perplexityApiKey || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="Enter your Perplexity API Key" />
+                             <label className="block text-xs font-medium text-text-secondary mt-2">Perplexity Model</label>
+                            <select name="perplexityModel" value={settings.perplexityModel || 'llama-3-sonar-large-32k-online'} onChange={handleInputChange} className="input-field mt-1 !py-2 text-sm">
+                                <option value="llama-3-sonar-large-32k-online">Llama 3 Sonar Large (Online)</option>
+                                <option value="llama-3-sonar-small-32k-online">Llama 3 Sonar Small (Online)</option>
+                            </select>
+                        </div>
+                        <hr className="border-border"/>
                         <div>
                             <label className="block text-sm font-medium text-text-primary">Google OAuth Client ID</label>
                             <input type={showKeys ? 'text' : 'password'} name="googleClientId" value={settings.googleClientId || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="Required for Google Sign-In & Drive" />

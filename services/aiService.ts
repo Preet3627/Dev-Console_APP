@@ -7,17 +7,27 @@ import * as groqService from './groqService';
 import * as perplexityService from './perplexityService';
 
 let genAI: GoogleGenAI | null = null;
+let lastUsedApiKey: string | undefined = undefined;
 
 const initializeGenAI = () => {
-    if (genAI) return genAI;
     const settings = getSecureItem<AppSettings>('appSettings');
     const apiKey = settings?.geminiApiKey;
-    if (apiKey) {
-        genAI = new GoogleGenAI({ apiKey });
-        return genAI;
+
+    if (!apiKey) {
+        genAI = null;
+        lastUsedApiKey = undefined;
+        return null;
     }
-    return null;
+    
+    // If the instance doesn't exist, or if the API key has changed, create a new instance.
+    if (!genAI || apiKey !== lastUsedApiKey) {
+        genAI = new GoogleGenAI({ apiKey });
+        lastUsedApiKey = apiKey;
+    }
+    
+    return genAI;
 };
+
 
 export const isAiConfigured = (): boolean => {
     const settings = getSecureItem<AppSettings>('appSettings');

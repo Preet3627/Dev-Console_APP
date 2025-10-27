@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import { pluginSourceCode } from '../plugin-source.js';
 
 /*
  * Environment variables required for this server to run:
@@ -75,10 +76,10 @@ const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
-    if (token == null) return res.sendStatus(401);
+    if (token == null) return res.status(401).json({ message: 'No token provided' });
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
+        if (err) return res.status(403).json({ message: 'Invalid or expired token' });
         req.user = user;
         next();
     });
@@ -527,6 +528,21 @@ apiV1Router.post('/settings', authenticateToken, async (req, res) => {
     }
 });
 
+// --- PLUGIN UPDATER ---
+apiV1Router.get('/connector-plugin/latest', authenticateToken, (req, res) => {
+    try {
+        const versionMatch = pluginSourceCode.match(/Version:\s*(.*)/);
+        const version = versionMatch ? versionMatch[1].trim() : '0.0.0';
+        res.json({
+            version: version,
+            source: pluginSourceCode
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Could not retrieve latest plugin source.' });
+    }
+});
+
+
 // ADMIN
 apiV1Router.get('/users', authenticateToken, isAdmin, async (req, res) => {
     if (!isDbConfigured) return res.json([]);
@@ -619,11 +635,91 @@ apiV1Router.get('/backend-config-status', authenticateToken, isAdmin, async (req
 });
 
 
-// PLACEHOLDER for other services
-apiV1Router.post('/nextcloud', authenticateToken, (req, res) => {
-    console.log('Received Nextcloud proxy request:', req.body);
-    res.status(501).json({ success: false, details: 'Nextcloud proxy not implemented in this backend.' });
+// NEXTCLOUD PROXY
+apiV1Router.post('/nextcloud', authenticateToken, async (req, res) => {
+    const { action, payload } = req.body;
+    const userId = req.user.id;
+    
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        const [settingsRows] = await connection.query('SELECT settings_json FROM app_settings WHERE user_id = ?', [userId]);
+
+        if (settingsRows.length === 0) {
+            return res.status(404).json({ success: false, details: 'Nextcloud settings not found.' });
+        }
+
+        const settings = JSON.parse(settingsRows[0].settings_json);
+        const { serverUrl, username, password, backupPath } = settings.nextcloud || {};
+
+        if (!serverUrl || !username || !password) {
+            return res.status(400).json({ success: false, details: 'Nextcloud credentials are not fully configured.' });
+        }
+
+        const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+        const davUrl = `${serverUrl.replace(/\/$/, '')}/remote.php/dav/files/${username}`;
+
+        if (action === 'verify') {
+            const response = await fetch(davUrl, {
+                method: 'PROPFIND',
+                headers: { 'Authorization': authHeader, 'Depth': '0' },
+            });
+            
+            if (response.status === 207 || response.status === 200) { // 207 Multi-Status is success for PROPFIND
+                res.json({ success: true });
+            } else {
+                res.status(response.status).json({ success: false, details: `Connection failed with status: ${response.status}. Check URL and credentials.` });
+            }
+
+        } else if (action === 'upload_backup') {
+            const { fileName, content } = payload; // content is base64
+            if (!fileName || !content) {
+                return res.status(400).json({ success: false, details: 'Missing fileName or content for upload.' });
+            }
+
+            const buffer = Buffer.from(content, 'base64');
+            const path = backupPath || 'dev-console-backups';
+            
+            const dirCheckResponse = await fetch(`${davUrl}/${path}`, {
+                 method: 'PROPFIND',
+                 headers: { 'Authorization': authHeader, 'Depth': '0' },
+            });
+
+            if (dirCheckResponse.status === 404) {
+                const mkcolResponse = await fetch(`${davUrl}/${path}`, {
+                    method: 'MKCOL',
+                    headers: { 'Authorization': authHeader },
+                });
+                if (mkcolResponse.status !== 201 && mkcolResponse.status !== 405) { // 201 Created, 405 Method Not Allowed (if exists)
+                     return res.status(mkcolResponse.status).json({ success: false, details: `Failed to create backup directory '${path}'. Status: ${mkcolResponse.status}` });
+                }
+            } else if (dirCheckResponse.status !== 207) {
+                 return res.status(dirCheckResponse.status).json({ success: false, details: `Error checking backup directory. Status: ${dirCheckResponse.status}` });
+            }
+
+            const uploadResponse = await fetch(`${davUrl}/${path}/${fileName}`, {
+                method: 'PUT',
+                headers: { 'Authorization': authHeader },
+                body: buffer,
+            });
+
+            if (uploadResponse.status === 201 || uploadResponse.status === 204) { // 201 Created or 204 No Content
+                res.json({ success: true });
+            } else {
+                res.status(uploadResponse.status).json({ success: false, details: `Upload failed with status: ${uploadResponse.status}.` });
+            }
+
+        } else {
+            res.status(400).json({ success: false, details: 'Invalid Nextcloud action.' });
+        }
+    } catch (error) {
+        console.error('Nextcloud proxy error:', error);
+        res.status(500).json({ success: false, details: `Internal server error: ${error.message}` });
+    } finally {
+        if (connection) await connection.end();
+    }
 });
+
 
 apiV1Router.post('/request-reset', (req, res) => {
      res.status(501).json({ message: 'Password reset not fully implemented in this backend.' });

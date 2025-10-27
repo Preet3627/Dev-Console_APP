@@ -44,6 +44,9 @@ export interface AppSettings {
     autoBackupEnabled?: boolean;
     autoBackupFrequency?: 'daily' | 'weekly' | 'monthly';
     autoBackupDestination?: 'local' | 'nextcloud' | 'googledrive';
+    
+    // Connector Plugin Settings
+    autoUpdateConnector?: boolean;
 }
 
 

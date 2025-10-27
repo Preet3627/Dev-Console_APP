@@ -196,8 +196,12 @@ const App: React.FC = () => {
         if (!siteData) return;
         setToast({ message: 'Pinging your site...', type: 'success' }); // Use success for neutral color
         try {
-            await testConnection(siteData);
-            setToast({ message: '✅ Connection successful! Data fetching is working.', type: 'success' });
+            const response = await testConnection(siteData);
+            const version = response?.connector_version;
+            const message = version 
+                ? `✅ Connection successful! Connector v${version}`
+                : '✅ Connection successful!';
+            setToast({ message, type: 'success' });
         } catch (error) {
             setToast({ message: `❌ Connection test failed: ${(error as Error).message}`, type: 'error' });
         }
@@ -242,7 +246,7 @@ const App: React.FC = () => {
             case 'backendStatus':
                 return <BackendStatusView />;
             case 'settings':
-                return <Settings onDisconnect={handleLogout} />;
+                return <Settings siteData={siteData} onDisconnect={handleLogout} />;
             default:
                 return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} />;
         }

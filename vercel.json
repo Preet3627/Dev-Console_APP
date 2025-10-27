@@ -16,7 +16,7 @@
   "routes": [
     {
       "src": "/dev-console-api/(.*)",
-      "dest": "/backend/index.js"
+      "dest": "backend/index.js"
     },
     {
       "handle": "filesystem"

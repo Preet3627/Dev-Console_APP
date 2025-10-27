@@ -78,7 +78,17 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                 }
             }
         } catch (err) {
-            setError(`An error occurred: ${(err as Error).message}`);
+            let errorMessage = (err as Error).message;
+            try {
+                // Attempt to parse nested JSON error messages, common with some API clients
+                const errorJson = JSON.parse(errorMessage);
+                if (errorJson.error && errorJson.error.message) {
+                    errorMessage = errorJson.error.message;
+                }
+            } catch (e) {
+                // Not a JSON string, use the original message
+            }
+            setError(`An error occurred: ${errorMessage}`);
         } finally {
             setIsLoading(false);
         }
