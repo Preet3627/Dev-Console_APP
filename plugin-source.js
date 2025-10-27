@@ -62,7 +62,7 @@ class Dev_Console_Connector {
             if (!function_exists('wp_generate_password')) { require_once ABSPATH . 'wp-includes/pluggable.php'; }
             update_option(DC_API_KEY_OPTION, wp_generate_password(64, false, false));
         }
-        if (!get_option(DC_CORS_SETTINGS_OPTION)) { add_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "https://dev.ponsrischool.in\\nhttp://localhost:5173"]); }
+        if (!get_option(DC_CORS_SETTINGS_OPTION)) { add_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\\nhttps://dev.ponsrischool.in\\nhttps://ponsrischool.in"]); }
     }
 
     public static function activate() {
@@ -109,7 +109,7 @@ class Dev_Console_Connector {
 
             <div id="dc-connector-settings-form">
                 <?php
-                $options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "https://dev.ponsrischool.in\\nhttp://localhost:5173"]);
+                $options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\\nhttps://dev.ponsrischool.in\\nhttps://ponsrischool.in"]);
                 ?>
                 <h2>Security: Allowed Origins (CORS)</h2>
                 <p>Control which frontend domains can access this site's Connector API.</p>
@@ -126,7 +126,7 @@ class Dev_Console_Connector {
                             <th scope="row"><label for="dc_connector_allowed_origins">Allowed Origins</label></th>
                             <td>
                                 <textarea name="allowed_origins" rows="5" cols="50" class="large-text" id="dc_connector_allowed_origins"><?php echo esc_textarea($options['allowed_origins'] ?? ''); ?></textarea>
-                                <p class="description">Enter allowed domains, one per line (e.g., https://dev.ponsrischool.in, http://localhost:5173).</p>
+                                <p class="description">Enter allowed domains, one per line (e.g., http://localhost:5173, https://dev.ponsrischool.in).</p>
                             </td>
                         </tr>
                     </tbody>
