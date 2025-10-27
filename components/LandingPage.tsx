@@ -82,13 +82,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
         <div className="relative">
              <header className="landing-header">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
+                    <div className="flex justify-between items-center h-20">
                         <div className="flex items-center space-x-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
                             <PM_SHRI_Logo className="h-8 w-8" />
                             <span className="text-xl font-bold tracking-wider">Dev-Console</span>
                         </div>
                         <div className="flex items-center">
-                            <button onClick={onEnterApp} className="btn-primary-landing">Launch Console</button>
+                            <button onClick={onEnterApp} className="btn-primary-landing py-3 px-8 text-sm">Launch Console</button>
                         </div>
                     </div>
                 </div>
@@ -97,7 +97,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
             <main className="overflow-x-hidden">
                 <section className="relative pt-48 pb-20 lg:pt-64 lg:pb-24 text-center">
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <h1 className="animate-on-scroll fade-in-up hero-glow-text text-5xl md:text-7xl font-extrabold leading-tight mb-6" style={{ animationDelay: '0.1s' }}>
+                        <h1 className="animate-on-scroll fade-in-up text-5xl md:text-7xl font-extrabold leading-tight mb-6" style={{ animationDelay: '0.1s' }}>
                             The Command Center for Modern <span className="wordpress-gradient-text">WordPress</span> Development
                         </h1>
                         <p className="animate-on-scroll fade-in-up max-w-3xl mx-auto text-lg md:text-xl text-text-secondary mb-10" style={{ animationDelay: '0.2s' }}>
@@ -165,7 +165,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                          <div className="animate-on-scroll zoom-in glass-card-landing p-10 md:p-16 text-center">
                             <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Testimonial author" className="w-24 h-24 rounded-full mx-auto mb-6 border-4 border-accent-violet/50 shadow-lg"/>
-                            <p className="text-2xl font-medium leading-relaxed italic text-text-primary mb-6">"This tool has fundamentally changed how we approach WordPress projects. What used to take days now takes minutes. The AI Co-Pilot is like having a senior developer on call 24/7."</p>
+                            <p className="text-2xl font-medium leading-loose italic text-text-primary mb-6">"This tool has fundamentally changed how we approach WordPress projects. What used to take days now takes minutes. The AI Co-Pilot is like having a senior developer on call 24/7."</p>
                             <div>
                                 <h4 className="font-bold text-lg text-text-primary">Alex Johnson</h4>
                                 <p className="text-text-secondary">Lead Developer, Digital Agency</p>
