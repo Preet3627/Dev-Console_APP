@@ -1,0 +1,5 @@
+{
+  "name": "Dev-Console",
+  "description": "An advanced local WordPress management system that uses AI to generate, edit, and troubleshoot plugins and themes, and syncs changes directly to a live WordPress site via a connector plugin.",
+  "requestFramePermissions": []
+}

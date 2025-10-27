@@ -1,0 +1,290 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import Dashboard from './components/Dashboard';
+import AssetManager from './components/AssetManager';
+import CodeEditor from './components/CodeEditor';
+import CoPilot from './components/CoPilot';
+import ConnectorSetupModal from './components/ConnectorSetupModal';
+import Login from './components/Login';
+import Settings from './components/Settings';
+import Generator from './components/Generator';
+import PluginGeneratorModal from './components/PluginGeneratorModal';
+import ThemeGeneratorModal from './components/ThemeGeneratorModal';
+import DatabaseManager from './components/DatabaseManager';
+import SecurityScanner from './components/SecurityScanner';
+import PerformanceOptimizer from './components/PerformanceOptimizer';
+import PluginLogViewer from './components/PluginLogViewer';
+import SignUp from './components/SignUp';
+import Verification from './components/Verification';
+import ForgotPassword from './components/ForgotPassword';
+import FileManager from './components/FileManager';
+import BackupRestore from './components/BackupRestore';
+import AdminPanel from './components/AdminPanel';
+import CoPilotView from './components/CoPilotView';
+import DatabaseSetup from './components/DatabaseSetup';
+
+import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';
+import { getEncryptedSiteData, testConnection, getBackendStatus } from './services/wordpressService';
+import { SiteData, AppSettings, Asset, AssetFile, AssetType } from './types';
+import FloatingCoPilotButton from './components/FloatingCoPilotButton';
+
+export type View = 'dashboard' | 'plugins' | 'themes' | 'database' | 'generator' | 'scanner' | 'optimizer' | 'logs' | 'settings' | 'copilot' | 'fileManager' | 'backupRestore' | 'adminPanel';
+type AuthView = 'login' | 'signup' | 'verify' | 'forgot_password';
+type Toast = { message: string; type: 'success' | 'error' };
+export type AppStatus = 'loading' | 'needs_setup' | 'setup_error' | 'ready';
+
+const App: React.FC = () => {
+    const [authView, setAuthView] = useState<AuthView>('login');
+    const [verificationEmail, setVerificationEmail] = useState('');
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [currentView, setCurrentView] = useState<View>('dashboard');
+    const [siteData, setSiteData] = useState<SiteData | null>(null);
+    const [showConnectorModal, setShowConnectorModal] = useState(false);
+    const [showCoPilotModal, setShowCoPilotModal] = useState(false);
+    const [coPilotInitialPrompt, setCoPilotInitialPrompt] = useState<string | undefined>(undefined);
+    const [showEditor, setShowEditor] = useState(false);
+    const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
+    const [fileToEdit, setFileToEdit] = useState<AssetFile | null>(null);
+    const [showPluginGenerator, setShowPluginGenerator] = useState(false);
+    const [showThemeGenerator, setShowThemeGenerator] = useState(false);
+    const [modalBgColor, setModalBgColor] = useState('rgba(17, 24, 39, 0.5)'); // glass-bg
+    const [toast, setToast] = useState<Toast | null>(null);
+    const [appStatus, setAppStatus] = useState<AppStatus>('loading');
+    const [setupError, setSetupError] = useState('');
+
+    const checkBackendStatus = useCallback(async () => {
+        setAppStatus('loading');
+        setSetupError('');
+        try {
+            const status = await getBackendStatus();
+            if (status.database === 'unconfigured') {
+                setAppStatus('needs_setup');
+            } else if (status.database === 'error') {
+                setAppStatus('setup_error');
+                setSetupError(status.message || 'The backend failed to connect to the database. Please check your .env configuration and ensure the database server is running.');
+            } else if (status.backend === 'ok' && status.database === 'ok') {
+                setAppStatus('ready');
+            } else {
+                setAppStatus('setup_error');
+                setSetupError(status.message || 'Could not connect to the backend server.');
+            }
+        } catch (e) {
+            setAppStatus('setup_error');
+            setSetupError('A network error occurred while trying to reach the backend server. Is it running?');
+        }
+    }, []);
+
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => {
+                setToast(null);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
+
+    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, siteData?: SiteData | null }) => {
+        setSecureItem('authToken', data.token);
+        setSecureItem('userEmail', data.email);
+        setSecureItem('isAdmin', data.isAdmin);
+        setSecureItem('appSettings', data.settings);
+        setIsAdmin(data.isAdmin);
+        setIsLoggedIn(true);
+
+        if (data.siteData) {
+            setSiteData(data.siteData);
+            setSecureItem('siteData', data.siteData);
+        } else {
+            // Check for locally stored site data if not provided from login
+            const localSiteData = getSecureItem<SiteData>('siteData');
+            setSiteData(localSiteData);
+        }
+    };
+
+    const handleLogout = () => {
+        removeSecureItem('authToken');
+        removeSecureItem('userEmail');
+        removeSecureItem('isAdmin');
+        // Keep app settings but clear site-specific data
+        removeSecureItem('siteData');
+        setIsLoggedIn(false);
+        setSiteData(null);
+        setCurrentView('dashboard');
+        setAuthView('login');
+    };
+
+    const loadSiteData = useCallback(async () => {
+        try {
+            const data = await getEncryptedSiteData();
+            if (data) {
+                setSiteData(data);
+                setSecureItem('siteData', data);
+            }
+        } catch (error) {
+            console.error("Could not load remote site data:", error);
+            const localData = getSecureItem<SiteData>('siteData');
+            if (localData) setSiteData(localData);
+        }
+    }, []);
+
+    useEffect(() => {
+        checkBackendStatus();
+        const token = getSecureItem('authToken');
+        const adminStatus = getSecureItem<boolean>('isAdmin');
+        if (token) {
+            setIsLoggedIn(true);
+            setIsAdmin(!!adminStatus);
+            loadSiteData();
+        }
+    }, [loadSiteData, checkBackendStatus]);
+
+    const handleConnect = (data: SiteData) => {
+        setSiteData(data);
+        setSecureItem('siteData', data);
+        setShowConnectorModal(false);
+    };
+    
+    const handleEditAsset = (asset: Asset) => {
+        setAssetToEdit(asset);
+        setFileToEdit(null); // Reset file selection
+        setShowEditor(true);
+    };
+
+    const handleEditFile = (file: AssetFile) => {
+        setAssetToEdit({
+            name: 'WordPress Root',
+            identifier: 'root',
+            type: AssetType.Plugin, // Type doesn't really matter for root
+            version: 'N/A',
+            isActive: true,
+        });
+        setFileToEdit(file);
+        setShowEditor(true);
+    };
+
+    const handleStartChat = (prompt?: string) => {
+        setCoPilotInitialPrompt(prompt);
+        setShowCoPilotModal(true);
+    };
+    
+    const handleNavigateToVerification = (email: string) => {
+        setVerificationEmail(email);
+        setAuthView('verify');
+    };
+
+    const handleTestConnection = async () => {
+        if (!siteData) return;
+        setToast({ message: 'Pinging your site...', type: 'success' }); // Use success for neutral color
+        try {
+            await testConnection(siteData);
+            setToast({ message: '✅ Connection successful! Data fetching is working.', type: 'success' });
+        } catch (error) {
+            setToast({ message: `❌ Connection test failed: ${(error as Error).message}`, type: 'error' });
+        }
+    };
+
+    const renderView = () => {
+        if (!siteData && !['dashboard', 'settings', 'generator', 'adminPanel'].includes(currentView)) {
+             return (
+                <div className="text-center p-8">
+                    <h2 className="text-2xl font-semibold mb-4">Site Not Connected</h2>
+                    <p className="text-text-secondary mb-6">Please connect to a WordPress site to use this feature.</p>
+                    <button onClick={() => setShowConnectorModal(true)} className="btn btn-primary">Connect Now</button>
+                </div>
+            );
+        }
+
+        switch (currentView) {
+            case 'dashboard':
+                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} />;
+            case 'plugins':
+                return <AssetManager siteData={siteData!} assetType={AssetType.Plugin} onEditAsset={handleEditAsset} />;
+            case 'themes':
+                return <AssetManager siteData={siteData!} assetType={AssetType.Theme} onEditAsset={handleEditAsset} />;
+            case 'database':
+                return <DatabaseManager siteData={siteData!} />;
+            case 'generator':
+                return <Generator onGeneratePlugin={() => setShowPluginGenerator(true)} onGenerateTheme={() => setShowThemeGenerator(true)} />;
+            case 'scanner':
+                return <SecurityScanner siteData={siteData!} />;
+            case 'optimizer':
+                return <PerformanceOptimizer siteData={siteData!} />;
+            case 'logs':
+                return <PluginLogViewer siteData={siteData!} />;
+            case 'fileManager':
+                return <FileManager siteData={siteData!} onEditFile={handleEditFile} />;
+            case 'backupRestore':
+                return <BackupRestore siteData={siteData!} />;
+            case 'copilot':
+                return <CoPilotView siteData={siteData} />;
+            case 'adminPanel':
+                return <AdminPanel />;
+            case 'settings':
+                return <Settings onDisconnect={handleLogout} />;
+            default:
+                return <Dashboard onStartChat={handleStartChat} isConnected={!!siteData} onConnect={() => setShowConnectorModal(true)} />;
+        }
+    };
+    
+    if (appStatus === 'loading') {
+        return (
+            <div className="flex h-screen bg-background text-text-primary font-sans items-center justify-center">
+                <p>Initializing...</p>
+            </div>
+        );
+    }
+
+    if (appStatus === 'needs_setup' || appStatus === 'setup_error') {
+        return <DatabaseSetup onStatusRefresh={checkBackendStatus} error={setupError} />;
+    }
+
+    if (!isLoggedIn) {
+        switch (authView) {
+            case 'signup':
+                return <SignUp onBackToLogin={() => setAuthView('login')} onNavigateToVerification={handleNavigateToVerification} />;
+            case 'verify':
+                return <Verification email={verificationEmail} onVerificationSuccess={() => setAuthView('login')} onBackToLogin={() => setAuthView('login')} />;
+            case 'forgot_password':
+                return <ForgotPassword onBackToLogin={() => setAuthView('login')} />;
+            case 'login':
+            default:
+                return <Login onLogin={handleLogin} onNavigateToSignUp={() => setAuthView('signup')} onNavigateToForgotPassword={() => setAuthView('forgot_password')} onNavigateToVerification={handleNavigateToVerification} />;
+        }
+    }
+    
+    return (
+        <div className="flex h-screen bg-background text-text-primary font-sans">
+            <Sidebar currentView={currentView} setView={setCurrentView} onLogout={handleLogout} isAdmin={isAdmin} />
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <Header 
+                    isConnected={!!siteData} 
+                    siteUrl={siteData?.siteUrl || ''} 
+                    onConnect={() => setShowConnectorModal(true)} 
+                    onRefresh={loadSiteData}
+                    onTestConnection={handleTestConnection}
+                />
+                <main className="flex-1 overflow-y-auto p-8 animation-bg-pan">
+                    {renderView()}
+                </main>
+            </div>
+            
+            <FloatingCoPilotButton onClick={() => handleStartChat()} />
+
+            {toast && (
+                <div className={`toast ${toast.type === 'success' ? 'toast-success' : 'toast-error'}`}>
+                    {toast.message}
+                </div>
+            )}
+
+            {showConnectorModal && <ConnectorSetupModal onClose={() => setShowConnectorModal(false)} onConnect={handleConnect} />}
+            {showCoPilotModal && <CoPilot onClose={() => setShowCoPilotModal(false)} siteData={siteData} initialPrompt={coPilotInitialPrompt} modalBgColor={modalBgColor} />}
+            {showEditor && assetToEdit && <CodeEditor siteData={siteData!} asset={assetToEdit} initialFile={fileToEdit || undefined} onClose={() => setShowEditor(false)} modalBgColor={modalBgColor} />}
+            {showPluginGenerator && <PluginGeneratorModal onClose={() => setShowPluginGenerator(false)} siteData={siteData} modalBgColor={modalBgColor} />}
+            {showThemeGenerator && <ThemeGeneratorModal onClose={() => setShowThemeGenerator(false)} siteData={siteData} modalBgColor={modalBgColor} />}
+        </div>
+    );
+};
+
+export default App;
