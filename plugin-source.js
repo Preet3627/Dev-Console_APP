@@ -1,9 +1,8 @@
-
 export const pluginSourceCode = `<?php
 /**
  * Plugin Name: Dev-Console Connector
  * Description: Securely connects your WordPress site to the Dev-Console Co-Pilot application.
- * Version: 2.7.0
+ * Version: 2.8.0
  * Author: PM-SHRI
  * Author URI: https://ponsrischool.in
  */
@@ -26,7 +25,7 @@ if (!defined('DC_BACKUP_DIR_SITE')) { define('DC_BACKUP_DIR_SITE', 'dev-console-
 // Custom exception for controlled, user-facing error messages.
 class DC_Connector_Exception extends Exception {}
 
-class Dev_Console_Connector {
+final class Dev_Console_Connector {
 
     private static $instance;
 
@@ -37,41 +36,44 @@ class Dev_Console_Connector {
         return self::$instance;
     }
 
-    private function __construct() {
-        // Actions are now hooked in the init() method to ensure correct loading order.
-    }
-
     /**
-     * Initializes the plugin by setting up hooks.
+     * Constructor. Registers all necessary hooks.
      */
-    public function init() {
-        $this->check_and_create_options();
+    private function __construct() {
+        add_action('init', [$this, 'check_and_create_options']);
         add_action('rest_api_init', [$this, 'register_routes']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_filter('rest_pre_serve_request', [$this, 'handle_cors_headers'], 10, 4);
     }
 
     public function check_and_create_options() {
-        // This runs on every page load but only acts if the options are missing.
-        // It is a safer way to initialize options than using the activation hook.
+        // Load pluggable.php once if it hasn't been loaded by WordPress core yet.
+        if (!function_exists('wp_generate_password')) {
+             require_once ABSPATH . 'wp-includes/pluggable.php';
+        }
+
+        // This runs once per page load and ensures options are always present.
         if (!get_option(DC_CONNECTOR_KEY_OPTION)) {
-            if (!function_exists('wp_generate_password')) { require_once ABSPATH . 'wp-includes/pluggable.php'; }
+            // We now know wp_generate_password is available here
             update_option(DC_CONNECTOR_KEY_OPTION, wp_generate_password(64, false, false));
         }
         if (!get_option(DC_API_KEY_OPTION)) {
-            if (!function_exists('wp_generate_password')) { require_once ABSPATH . 'wp-includes/pluggable.php'; }
+            // We now know wp_generate_password is available here
             update_option(DC_API_KEY_OPTION, wp_generate_password(64, false, false));
         }
-        if (!get_option(DC_CORS_SETTINGS_OPTION)) { add_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\\nhttps://dev.ponsrischool.in\\nhttps://ponsrischool.in"]); }
-    }
-
-    public static function activate() {
-        // This hook is intentionally left minimal to prevent fatal errors on activation.
-        // Option creation is handled on the 'plugins_loaded' hook.
+        if (!get_option(DC_CORS_SETTINGS_OPTION)) {
+            add_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\nhttps://dev.ponsrischool.in\nhttps://ponsrischool.in"]);
+        }
     }
 
     public function add_admin_menu() {
-        add_menu_page('Dev-Console Connector', 'Connector', 'manage_options', 'dev-console-connector', [$this, 'create_settings_page_html'], 'dashicons-admin-plugins');
+        add_options_page(
+            'Dev-Console Connector',
+            'Dev-Console',
+            'manage_options',
+            'dev-console-connector',
+            [$this, 'create_settings_page_html']
+        );
     }
 
     public function create_settings_page_html() {
@@ -109,7 +111,7 @@ class Dev_Console_Connector {
 
             <div id="dc-connector-settings-form">
                 <?php
-                $options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\\nhttps://dev.ponsrischool.in\\nhttps://ponsrischool.in"]);
+                $options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\nhttps://dev.ponsrischool.in\nhttps://ponsrischool.in"]);
                 ?>
                 <h2>Security: Allowed Origins (CORS)</h2>
                 <p>Control which frontend domains can access this site's Connector API.</p>
@@ -202,7 +204,7 @@ class Dev_Console_Connector {
                             allowed_origins: originsTextarea.value
                         };
 
-                        fetch('<?php echo esc_url_raw(rest_url('dev-console/v1/connector-settings')); ?>', {
+                        fetch('<?php echo esc_url_raw(rest_url("dev-console/v1/connector-settings")); ?>', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -630,7 +632,7 @@ $results[] = [
     'status' => (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) ? 'fail' : 'pass', 
     'severity' => 'Medium', 
     'description' => 'File editing must be enabled for the Dev-Console to write to files. If disabled, write operations will fail.', 
-    'recommendation' => "To fix this, set \`define(\'DISALLOW_FILE_EDIT\', false);\` in your wp-config.php file or remove the line defining it."
+    'recommendation' => "To fix this, set \`define('DISALLOW_FILE_EDIT', false);\` in your wp-config.php file or remove the line defining it."
 ];
         $results[] = ['id' => 'db_prefix', 'title' => 'Database Prefix is Not Default', 'status' => ($wpdb->prefix === 'wp_') ? 'fail' : 'pass', 'severity' => 'Medium', 'description' => 'Using the default "wp_" database prefix makes SQL injection attacks easier.', 'recommendation' => 'Use a unique database prefix. This requires a more involved process to change on an existing site.'];
 
@@ -670,17 +672,17 @@ $results[] = [
     }
 }
 
-// Use a static method for the activation hook to prevent closure serialization issues.
-register_activation_hook(__FILE__, ['Dev_Console_Connector', 'activate']);
-
 /**
- * Initializes the plugin instance.
+ * Begins execution of the plugin.
  *
- * This function is hooked to 'plugins_loaded' to ensure all WordPress functions and other plugins
- * have been loaded before our plugin's logic runs.
+ * Since everything within the plugin is registered via hooks in the constructor,
+ * we only need to instantiate the class to get things rolling.
  */
-function dev_console_connector_init() {
-    Dev_Console_Connector::get_instance()->init();
+function dev_console_connector_run() {
+    return Dev_Console_Connector::get_instance();
 }
-add_action('plugins_loaded', 'dev_console_connector_init');
+
+// Run the plugin
+dev_console_connector_run();
+?>
 `;
