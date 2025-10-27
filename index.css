@@ -196,6 +196,19 @@ body {
   color: #f9fafb;
 }
 
+/* ADD: Styles for KBD elements */
+kbd {
+    background-color: #374151;
+    border-radius: 4px;
+    border: 1px solid #4b5563;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.2);
+    padding: 2px 6px;
+    font-size: 0.8em;
+    font-family: 'Roboto Mono', monospace;
+    color: #f9fafb;
+    margin: 0 2px;
+}
+
 /* 4. Utilities */
 
 /* Keyframes */
@@ -216,6 +229,28 @@ body {
 @keyframes toast-out {
   from { transform: translateX(0); opacity: 1; }
   to { transform: translateX(100%); opacity: 0; }
+}
+/* FIX: Add keyframes for the auto-execute glow effect. */
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 3px #a78bfa, 0 0 5px #22d3ee; }
+    50% { box-shadow: 0 0 8px #a78bfa, 0 0 12px #22d3ee; }
+}
+/* ADD: Keyframes for shortcut popup */
+@keyframes fade-in-up-small {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ADD: Class for shortcut popup */
+.shortcut-popup-animation {
+    animation: fade-in-up-small 0.3s ease-out;
+}
+
+
+/* FIX: Add the auto-execute glow class for the Co-Pilot input. */
+.auto-execute-glow {
+    border-color: #a78bfa;
+    animation: pulse-glow 2.5s infinite;
 }
 
 

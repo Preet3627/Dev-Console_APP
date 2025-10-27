@@ -168,6 +168,36 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData, onProfileUp
                         {updateStatus && <p className="text-xs mt-3 text-center">{updateStatus}</p>}
                     </div>
                 )}
+                
+                <div className="glass-card p-6">
+                    <h2 className="text-xl font-semibold mb-4">Co-Pilot Keyboard Shortcuts</h2>
+                    <div className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between py-1">
+                            <p className="text-text-primary">Send Message / Add to Queue</p>
+                            <div className="font-mono">
+                                <kbd>Ctrl</kbd> + <kbd>Enter</kbd>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                            <p className="text-text-primary">New Line</p>
+                            <div className="font-mono">
+                                <kbd>Enter</kbd>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                            <p className="text-text-primary">Toggle Automatic Execution</p>
+                            <div className="font-mono">
+                                <kbd>Shift</kbd> + <kbd>Tab</kbd>
+                            </div>
+                        </div>
+                         <div className="flex items-center justify-between py-1">
+                            <p className="text-text-primary">Edit Last Queued Prompt</p>
+                            <div>
+                                <kbd>↑</kbd> <span className="text-xs text-text-secondary font-mono">(Input must be empty)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div className="glass-card p-6">
                     <div className="flex justify-between items-center mb-4">
