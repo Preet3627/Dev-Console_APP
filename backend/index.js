@@ -151,49 +151,71 @@ const createTables = async (connection) => {
 
 
 const seedAdminUser = async () => {
+    // Only proceed if ADMIN_EMAIL is explicitly set in the environment.
+    if (!process.env.ADMIN_EMAIL) {
+        let connection;
+        try {
+            connection = await mysql.createConnection(dbConfig);
+            const [users] = await connection.query('SELECT COUNT(*) as count FROM users');
+            if (users[0].count === 0) {
+                 console.log('🟡 ADMIN_EMAIL not set in .env. No default admin will be created.');
+                 console.log('🟡 The first user to register will become a regular user.');
+            }
+        } catch (error) {
+            // This might fail if DB isn't ready, which is fine. We'll catch it on the main status check.
+        } finally {
+            if (connection) await connection.end();
+        }
+        return;
+    }
+
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD || crypto.randomBytes(16).toString('hex');
+    
     let connection;
     try {
         connection = await mysql.createConnection(dbConfig);
-        const [users] = await connection.query('SELECT COUNT(*) as count FROM users');
-        if (users[0].count === 0) {
-            console.log('No users found. Seeding default admin account...');
-            const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-            const adminPassword = process.env.ADMIN_PASSWORD || crypto.randomBytes(16).toString('hex');
-            
+        const [existingUsers] = await connection.query('SELECT id FROM users WHERE email = ?', [adminEmail]);
+        const password_hash = await bcrypt.hash(adminPassword, 10);
+
+        if (existingUsers.length > 0) {
+            // User exists, ensure they are a verified admin with the correct password.
+            const adminId = existingUsers[0].id;
+            await connection.query(
+                'UPDATE users SET password_hash = ?, is_verified = true, is_admin = true WHERE id = ?',
+                [password_hash, adminId]
+            );
+            console.log(`✅ Admin user '${adminEmail}' exists. Synced password and permissions from .env.`);
+        } else {
+            // User does not exist, create them as a verified admin.
+            console.log(`Seeding new admin user '${adminEmail}' from .env configuration...`);
             if (!process.env.ADMIN_PASSWORD) {
                 console.log('**************************************************************');
-                console.log('*** NO ADMIN_PASSWORD ENV VAR SET. GENERATING RANDOM ONE:  ***');
                 console.log(`*** Admin Email: ${adminEmail}`);
-                console.log(`*** Admin Pass:  ${adminPassword}`);
+                console.log(`*** Generated Pass:  ${adminPassword} (set ADMIN_PASSWORD to control this)`);
                 console.log('**************************************************************');
             }
 
-            const password_hash = await bcrypt.hash(adminPassword, 10);
-            
             const [insertResult] = await connection.query(
                 'INSERT INTO users (email, password_hash, is_verified, is_admin) VALUES (?, ?, ?, ?)',
                 [adminEmail, password_hash, true, true]
             );
             const adminUserId = insertResult.insertId;
 
+            // Also create default settings for this new admin
             const defaultSettings = {
-              "aiProvider": "gemini", "creditSaverEnabled": true, "geminiApiKey": "", "geminiModel": "gemini-2.5-flash",
-              "openAiApiKey": "", "openAiModel": "gpt-4o", "claudeApiKey": "", "claudeModel": "claude-3-haiku-20240307",
-              "groqApiKey": "", "perplexityApiKey": "", "pageSpeedApiKey": "",
               "googleClientId": process.env.GOOGLE_CLIENT_ID,
-              "nextcloud": {"serverUrl": "","username": "","password": "","backupPath": "dev-console-backups"},
-              "googleDrive": {"folderName": "Dev-Console Backups"}
+              "aiProvider": "gemini", 
+              "creditSaverEnabled": true,
             };
-
             await connection.query(
                 'INSERT INTO app_settings (user_id, settings_json) VALUES (?, ?)',
                 [adminUserId, JSON.stringify(defaultSettings)]
             );
-            
-            console.log(`Admin user '${adminEmail}' created successfully.`);
+            console.log(`✅ Admin user '${adminEmail}' created successfully.`);
         }
     } catch (error) {
-        console.error('Error during database seeding:', error);
+        console.error('🚨 Error during database admin seeding:', error.message);
     } finally {
         if (connection) await connection.end();
     }
@@ -229,6 +251,16 @@ apiV1Router.get('/status', async (req, res) => {
     } finally {
         if (connection) await connection.end();
     }
+});
+
+// --- PUBLIC CONFIG ENDPOINT ---
+apiV1Router.get('/public-config', (req, res) => {
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        console.warn('GET /public-config: GOOGLE_CLIENT_ID is not set on the backend.');
+    }
+    res.json({
+        googleClientId: process.env.GOOGLE_CLIENT_ID,
+    });
 });
 
 
@@ -525,6 +557,67 @@ apiV1Router.delete('/users', authenticateToken, isAdmin, async (req, res) => {
         if (connection) await connection.end();
     }
 });
+
+apiV1Router.get('/backend-config-status', authenticateToken, isAdmin, async (req, res) => {
+    if (!isDbConfigured) {
+        return res.status(503).json({ message: 'Database is not configured.' });
+    }
+
+    let dbStatus = 'error';
+    let dbError = '';
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        await connection.query('SELECT 1');
+        dbStatus = 'ok';
+    } catch (e) {
+        dbError = e.message;
+    } finally {
+        if (connection) await connection.end();
+    }
+
+    let smtpStatus = 'not configured';
+    let smtpError = '';
+    if (transporter) {
+        try {
+            await transporter.verify();
+            smtpStatus = 'ok';
+        } catch (e) {
+            smtpStatus = 'error';
+            smtpError = e.message;
+        }
+    }
+
+    const configStatus = {
+        database: {
+            DB_HOST: process.env.DB_HOST || 'Not Set',
+            DB_USER: process.env.DB_USER || 'Not Set',
+            DB_DATABASE: process.env.DB_DATABASE || 'Not Set',
+            DB_PASSWORD: process.env.DB_PASSWORD ? '********' : 'Not Set',
+            connectionStatus: dbStatus,
+            connectionError: dbError,
+        },
+        secrets: {
+            JWT_SECRET: process.env.JWT_SECRET && process.env.JWT_SECRET !== 'default-secret-for-demo-mode' ? '********' : 'Not Set or Default',
+        },
+        google: {
+            GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'Not Set',
+        },
+        smtp: {
+            SMTP_HOST: process.env.SMTP_HOST || 'Not Set',
+            SMTP_PORT: process.env.SMTP_PORT || 'Not Set',
+            SMTP_USER: process.env.SMTP_USER || 'Not Set',
+            SMTP_PASS: process.env.SMTP_PASS ? '********' : 'Not Set',
+            SMTP_FROM: process.env.SMTP_FROM || 'Not Set',
+            SMTP_SECURE: process.env.SMTP_SECURE || 'Not Set',
+            connectionStatus: smtpStatus,
+            connectionError: smtpError,
+        }
+    };
+
+    res.json(configStatus);
+});
+
 
 // PLACEHOLDER for other services
 apiV1Router.post('/nextcloud', authenticateToken, (req, res) => {

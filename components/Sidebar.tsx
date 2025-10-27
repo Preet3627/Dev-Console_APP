@@ -27,6 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout, isAdm
         { view: 'optimizer', label: 'Optimizer', icon: SpeedIcon },
         { view: 'logs', label: 'Debug Logs', icon: FileIcon },
         { view: 'backupRestore', label: 'Backup/Restore', icon: BackupIcon },
+        { view: 'backendStatus', label: 'Backend Status', icon: ServerIcon, adminOnly: true },
         { view: 'adminPanel', label: 'Admin Panel', icon: ShieldIcon, adminOnly: true },
     ];
 

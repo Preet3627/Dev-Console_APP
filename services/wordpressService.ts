@@ -1,4 +1,4 @@
-import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog } from '../types';
+import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus } from '../types';
 import { getSecureItem, setSecureItem, removeSecureItem, encryptData, decryptData } from '../utils/secureLocalStorage';
 
 const MASTER_API_BASE_URL = '/dev-console-api/v1';
@@ -77,6 +77,21 @@ export const getBackendStatus = async (): Promise<{ backend: string; database: s
             database: 'unknown',
             message: 'Failed to connect to the backend server. Is it running?'
         };
+    }
+};
+
+// --- Public Config ---
+export const getPublicConfig = async (): Promise<{ googleClientId?: string }> => {
+    try {
+        const response = await fetch(`${MASTER_API_BASE_URL}/public-config`);
+        if (!response.ok) {
+            console.error(`Failed to fetch public config: ${response.statusText}`);
+            return {};
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Network error while fetching public config:', error);
+        return {};
     }
 };
 
@@ -244,4 +259,8 @@ export const deleteUser = async (email: string): Promise<{ success: boolean }> =
         method: 'DELETE',
         body: JSON.stringify({ email }),
     });
+};
+
+export const getBackendConfigStatus = async (): Promise<BackendConfigStatus> => {
+    return masterApiFetch('/backend-config-status');
 };

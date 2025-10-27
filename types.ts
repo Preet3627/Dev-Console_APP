@@ -113,3 +113,30 @@ export interface ErrorLog {
     message: string;
     stack?: string;
 }
+
+export interface BackendConfigStatus {
+    database: {
+        DB_HOST: string;
+        DB_USER: string;
+        DB_DATABASE: string;
+        DB_PASSWORD: '********' | 'Not Set';
+        connectionStatus: 'ok' | 'error';
+        connectionError: string;
+    };
+    secrets: {
+        JWT_SECRET: '********' | 'Not Set';
+    };
+    google: {
+        GOOGLE_CLIENT_ID: string;
+    };
+    smtp: {
+        SMTP_HOST: string;
+        SMTP_PORT: string;
+        SMTP_USER: string;
+        SMTP_PASS: '********' | 'Not Set';
+        SMTP_FROM: string;
+        SMTP_SECURE: string;
+        connectionStatus: 'ok' | 'error' | 'not configured';
+        connectionError: string;
+    };
+}

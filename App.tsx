@@ -23,13 +23,14 @@ import BackupRestore from './components/BackupRestore';
 import AdminPanel from './components/AdminPanel';
 import CoPilotView from './components/CoPilotView';
 import DatabaseSetup from './components/DatabaseSetup';
+import BackendStatusView from './components/BackendStatusView';
 
 import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';
-import { getEncryptedSiteData, testConnection, getBackendStatus } from './services/wordpressService';
+import { getEncryptedSiteData, testConnection, getBackendStatus, getPublicConfig } from './services/wordpressService';
 import { SiteData, AppSettings, Asset, AssetFile, AssetType } from './types';
 import FloatingCoPilotButton from './components/FloatingCoPilotButton';
 
-export type View = 'dashboard' | 'plugins' | 'themes' | 'database' | 'generator' | 'scanner' | 'optimizer' | 'logs' | 'settings' | 'copilot' | 'fileManager' | 'backupRestore' | 'adminPanel';
+export type View = 'dashboard' | 'plugins' | 'themes' | 'database' | 'generator' | 'scanner' | 'optimizer' | 'logs' | 'settings' | 'copilot' | 'fileManager' | 'backupRestore' | 'adminPanel' | 'backendStatus';
 type AuthView = 'login' | 'signup' | 'verify' | 'forgot_password';
 type Toast = { message: string; type: 'success' | 'error' };
 export type AppStatus = 'loading' | 'needs_setup' | 'setup_error' | 'ready';
@@ -73,6 +74,19 @@ const App: React.FC = () => {
         } catch (e) {
             setAppStatus('setup_error');
             setSetupError('A network error occurred while trying to reach the backend server. Is it running?');
+        }
+    }, []);
+
+    const loadInitialConfig = useCallback(async () => {
+        try {
+            const publicConfig = await getPublicConfig();
+            if (publicConfig.googleClientId) {
+                const currentSettings = getSecureItem<AppSettings>('appSettings') || {};
+                const updatedSettings = { ...currentSettings, googleClientId: publicConfig.googleClientId };
+                setSecureItem('appSettings', updatedSettings);
+            }
+        } catch (e) {
+            console.error("Failed to load initial public configuration from the backend.", e);
         }
     }, []);
 
@@ -130,15 +144,19 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        checkBackendStatus();
-        const token = getSecureItem('authToken');
-        const adminStatus = getSecureItem<boolean>('isAdmin');
-        if (token) {
-            setIsLoggedIn(true);
-            setIsAdmin(!!adminStatus);
-            loadSiteData();
-        }
-    }, [loadSiteData, checkBackendStatus]);
+        const initializeApp = async () => {
+            await loadInitialConfig();
+            await checkBackendStatus();
+            const token = getSecureItem('authToken');
+            const adminStatus = getSecureItem<boolean>('isAdmin');
+            if (token) {
+                setIsLoggedIn(true);
+                setIsAdmin(!!adminStatus);
+                loadSiteData();
+            }
+        };
+        initializeApp();
+    }, [loadInitialConfig, checkBackendStatus, loadSiteData]);
 
     const handleConnect = (data: SiteData) => {
         setSiteData(data);
@@ -186,7 +204,7 @@ const App: React.FC = () => {
     };
 
     const renderView = () => {
-        if (!siteData && !['dashboard', 'settings', 'generator', 'adminPanel'].includes(currentView)) {
+        if (!siteData && !['dashboard', 'settings', 'generator', 'adminPanel', 'backendStatus'].includes(currentView)) {
              return (
                 <div className="text-center p-8">
                     <h2 className="text-2xl font-semibold mb-4">Site Not Connected</h2>
@@ -221,6 +239,8 @@ const App: React.FC = () => {
                 return <CoPilotView siteData={siteData} />;
             case 'adminPanel':
                 return <AdminPanel />;
+            case 'backendStatus':
+                return <BackendStatusView />;
             case 'settings':
                 return <Settings onDisconnect={handleLogout} />;
             default:
