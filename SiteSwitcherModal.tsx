@@ -1,3 +1,3 @@
 // This file re-exports the component from the /components directory to resolve module pathing issues.
-import Header from './components/Header';
-export default Header;
+import SiteSwitcherModal from './components/SiteSwitcherModal';
+export default SiteSwitcherModal;

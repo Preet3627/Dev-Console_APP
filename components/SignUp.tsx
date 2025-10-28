@@ -9,6 +9,7 @@ interface SignUpProps {
     onBackToLogin: () => void;
     onNavigateToVerification: (email: string) => void;
     onLogin: (userData: { email: string; token: string; isAdmin: boolean; settings: AppSettings, sites: SiteData[], displayName?: string, profilePictureUrl?: string | null, isNewUser?: boolean }) => void;
+    // FIX: Add the onGoToLanding prop to match its usage in App.tsx.
     onGoToLanding: () => void;
 }
 

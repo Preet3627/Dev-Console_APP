@@ -1,36 +1,34 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
-import Sidebar from './components/Sidebar';
-import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import AssetManager from './components/AssetManager';
-import CodeEditor from './components/CodeEditor';
-import CoPilot from './components/CoPilot';
-import ConnectorSetupModal from './components/ConnectorSetupModal';
-import Login from './components/Login';
-import Settings from './components/Settings';
-import Generator from './components/Generator';
-import PluginGeneratorModal from './components/PluginGeneratorModal';
-import ThemeGeneratorModal from './components/ThemeGeneratorModal';
-import DatabaseManager from './components/DatabaseManager';
-import SecurityScanner from './components/SecurityScanner';
-import PerformanceOptimizer from './components/PerformanceOptimizer';
-import PluginLogViewer from './components/PluginLogViewer';
-import SignUp from './components/SignUp';
-import Verification from './components/Verification';
-import ForgotPassword from './components/ForgotPassword';
-import FileManager from './components/FileManager';
-import BackupRestore from './components/BackupRestore';
-import AdminPanel from './components/AdminPanel';
-import CoPilotView from './components/CoPilotView';
-import DatabaseSetup from './components/DatabaseSetup';
-import BackendStatusView from './components/BackendStatusView';
+import Sidebar from './Sidebar';
+import Header from './Header';
+import Dashboard from './Dashboard';
+import AssetManager from './AssetManager';
+import CodeEditor from './CodeEditor';
+import CoPilot from './CoPilot';
+import ConnectorSetupModal from './ConnectorSetupModal';
+import Login from './Login';
+import Settings from './Settings';
+import Generator from './Generator';
+import PluginGeneratorModal from './PluginGeneratorModal';
+import ThemeGeneratorModal from './ThemeGeneratorModal';
+import DatabaseManager from './DatabaseManager';
+import SecurityScanner from './SecurityScanner';
+import PerformanceOptimizer from './PerformanceOptimizer';
+import PluginLogViewer from './PluginLogViewer';
+import SignUp from './SignUp';
+import Verification from './Verification';
+import ForgotPassword from './ForgotPassword';
+import FileManager from './FileManager';
+import BackupRestore from './BackupRestore';
+import AdminPanel from './AdminPanel';
+import CoPilotView from './CoPilotView';
+import DatabaseSetup from './DatabaseSetup';
+import BackendStatusView from './BackendStatusView';
 import LandingPage from './LandingPage';
-import SiteSwitcherModal from './components/SiteSwitcherModal';
-// ADD: Import the new WelcomeWizard and SeoManager components.
-import WelcomeWizard from './components/WelcomeWizard';
-import SeoManager from './components/SeoManager';
+import SiteSwitcherModal from './SiteSwitcherModal';
+import WelcomeWizard from './WelcomeWizard';
+import SeoManager from './SeoManager';
 
 
 import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';

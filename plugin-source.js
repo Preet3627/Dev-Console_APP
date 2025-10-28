@@ -1,6 +1,7 @@
 export const pluginSourceCode = `<?php
 /**
  * Plugin Name: Dev-Console Connector
+ * Plugin URI: https://ponsrischool.in
  * Description: Securely connects your WordPress site to the Dev-Console application, enabling AI-powered management and development.
  * Version: 4.0.0
  * Author: PM-SHRI
@@ -9,16 +10,6 @@ export const pluginSourceCode = `<?php
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
-}
-
-// Prevent fatal error if class is already defined
-if (class_exists('Dev_Console_Connector')) {
-    // Check if it's a request to update the plugin file itself
-    if (isset($_POST['action']) && $_POST['action'] === 'update_plugin_file' && isset($_POST['payload']['plugin_type']) && $_POST['payload']['plugin_type'] === 'connector') {
-        // Allow the update to proceed
-    } else {
-        return;
-    }
 }
 
 final class Dev_Console_Connector {
@@ -35,12 +26,10 @@ final class Dev_Console_Connector {
     }
 
     private function __construct() {
-        // On plugin activation, generate keys
-        register_activation_hook(__FILE__, [$this, 'activate']);
-
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_styles']);
+        add_action('plugins_loaded', [$this, 'init_keys']);
     }
 
     /**
@@ -548,7 +537,6 @@ final class Dev_Console_Connector {
         return ['status' => 'Connector plugin updated. Please reactivate if necessary.'];
     }
 
-    // FIX: Add actions for getting and updating WordPress SEO settings.
     private function _action_get_seo_data($payload) {
         return [
             'site_title' => get_option('blogname', ''),
@@ -621,6 +609,9 @@ final class Dev_Console_Connector {
     }
 
     private function get_plugin_version() {
+        if (!function_exists('get_plugin_data')) {
+            require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
         $plugin_data = get_plugin_data(__FILE__);
         return $plugin_data['Version'];
     }
@@ -652,10 +643,22 @@ final class Dev_Console_Connector {
     }
 }
 
+/**
+ * The main function to run the plugin.
+ */
 function dev_console_connector_run() {
-    return Dev_Console_Connector::get_instance();
+    Dev_Console_Connector::get_instance();
 }
+add_action('plugins_loaded', 'dev_console_connector_run');
 
-dev_console_connector_run();
+/**
+ * Activation hook callback.
+ */
+function dev_console_connector_activate() {
+    // We get the instance here to ensure the class is loaded and then call the public activate method.
+    Dev_Console_Connector::get_instance()->activate();
+}
+register_activation_hook(__FILE__, 'dev_console_connector_activate');
+
 ?>
 `;
