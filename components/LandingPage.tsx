@@ -1,12 +1,15 @@
 
+
 import React, { useEffect } from 'react';
 import { PM_SHRI_Logo, GenerateIcon, CoPilotIcon, ShieldIcon, SpeedIcon, FileIcon, DatabaseIcon } from './icons/Icons';
 
 // FIX: Add a global declaration for 'window.hljs' to inform TypeScript about the Highlight.js library.
+// FIX: Corrected the `window.hljs` type definition to include `highlightElement` which is used by the CodeViewer component. This resolves the TypeScript error.
 declare global {
   interface Window {
     hljs?: {
       highlightAll: () => void;
+      highlightElement: (element: HTMLElement) => void;
     };
   }
 }

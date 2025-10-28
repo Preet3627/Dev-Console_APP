@@ -1,10 +1,4 @@
-
-
-
-
-
-
-import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus, WordpressSeoData, AppSeoSettings } from '../types';
+import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus, WordpressSeoData, AppSeoSettings, FileSystemEntry } from '../types';
 import { getSecureItem, setSecureItem, removeSecureItem, encryptData, decryptData } from '../utils/secureLocalStorage';
 
 const MASTER_API_BASE_URL = '/dev-console-api/v1';
@@ -151,7 +145,6 @@ export const requestPasswordReset = async (email: string): Promise<{ message: st
     });
 };
 
-// FIX: Added the missing 'addSite' function to handle creating new site connections via the backend API.
 export const addSite = async (name: string, site_data_encrypted: string): Promise<{ id: number; name: string; site_data_encrypted: string; }> => {
     return masterApiFetch('/sites', {
         method: 'POST',
@@ -212,7 +205,6 @@ export const updateAndEncryptSiteData = async (siteData: SiteData): Promise<void
     });
 };
 
-// FIX: Add new functions for WordPress site SEO and application SEO to resolve module export errors.
 // --- SEO Management (WordPress Site) ---
 export const getWordpressSeoData = async (siteData: SiteData): Promise<WordpressSeoData> => {
     return connectorApiFetch(siteData, { action: 'get_seo_data' });
@@ -279,8 +271,9 @@ export const installAsset = async (siteData: SiteData, assetType: AssetType, ass
 };
 
 // --- File Management ---
-export const getAssetFiles = async (siteData: SiteData, assetIdentifier: string, assetType: AssetType): Promise<AssetFile[]> => {
-    return connectorApiFetch(siteData, { action: 'get_asset_files', payload: { assetIdentifier, assetType } });
+// FIX: Updated getAssetFiles to accept an optional path for directory navigation.
+export const getAssetFiles = async (siteData: SiteData, assetIdentifier: string, assetType: AssetType, path?: string): Promise<FileSystemEntry[]> => {
+    return connectorApiFetch(siteData, { action: 'get_asset_files', payload: { assetIdentifier, assetType, path } });
 };
 
 export const readFileContent = async (siteData: SiteData, assetIdentifier: string, assetType: AssetType, relativePath: string): Promise<{ content: string }> => {
@@ -308,7 +301,6 @@ export const executeSafeDbQuery = async (siteData: SiteData, queryType: string, 
     return connectorApiFetch(siteData, { action: 'execute_safe_db_query', payload: { queryType, params } });
 };
 
-// FIX: Added a new function to allow the AI to execute arbitrary (but validated) SELECT queries.
 export const executeArbitraryDbQuery = async (siteData: SiteData, query: string): Promise<any[]> => {
     return connectorApiFetch(siteData, { action: 'execute_arbitrary_db_query', payload: { query } });
 };

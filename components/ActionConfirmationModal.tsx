@@ -15,11 +15,11 @@ const ActionConfirmationModal: React.FC<ActionConfirmationModalProps> = ({ funct
 
     const getWarning = (functionName: string) => {
         switch(functionName) {
-            case 'executeDbQuery':
+            case 'executeArbitraryDbQuery':
             case 'writeFileContent':
             case 'deleteAsset':
             case 'installAsset':
-                return { level: 'high', text: 'HIGH RISK: This action is potentially destructive and irreversible.' };
+                return { level: 'high', text: 'HIGH RISK: This action modifies your site files or database and may be irreversible.' };
             case 'toggleAssetStatus':
                 return { level: 'medium', text: 'Medium Risk: This will change the state of your site.' };
             default:

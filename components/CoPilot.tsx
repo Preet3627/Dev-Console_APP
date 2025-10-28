@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SiteData, ChatMessage, Part, FunctionCallPart, FunctionResponsePart } from '../types';
-import { CloseIcon, SendIcon, CoPilotIcon, FullScreenIcon, ExitFullScreenIcon } from './icons/Icons';
+import { SiteData, ChatMessage, Part, FunctionResponsePart } from '../types';
+import { CloseIcon, SendIcon, FullScreenIcon, ExitFullScreenIcon, GeminiIcon } from './icons/Icons';
 import { createChatSession } from '../services/aiService';
 import { executeTool } from '../services/toolExecutor';
 import ActionConfirmationModal from './ActionConfirmationModal';
@@ -10,9 +10,11 @@ interface CoPilotProps {
     siteData: SiteData | null;
     initialPrompt?: string;
     modalBgColor?: string;
+    displayName: string;
+    profilePictureUrl: string | null;
 }
 
-const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, modalBgColor }) => {
+const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, modalBgColor, displayName, profilePictureUrl }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -157,13 +159,11 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
         try {
             const result = await executeTool(actionToExecute, siteData);
             
-             const functionResponsePart: FunctionResponsePart = {
+            // FIX: Correctly structure the function response part to resolve AI errors.
+            const functionResponsePart: FunctionResponsePart = {
                 functionResponse: {
                     name: actionToExecute.name,
-                    response: {
-                        name: actionToExecute.name,
-                        content: result,
-                    }
+                    response: result
                 }
             };
             
@@ -207,7 +207,8 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
 
     const renderPart = (part: Part, index: number) => {
         if ('text' in part) {
-            return <div key={index} className="prose prose-sm prose-invert max-w-none prose-p:font-mono" dangerouslySetInnerHTML={{ __html: part.text.replace(/\n/g, '<br />') }}></div>;
+            // FIX: Replaced `dangerouslySetInnerHTML` with React fragments to handle text and newlines safely and correctly.
+            return <React.Fragment key={index}>{part.text.split('\n').map((line, i, arr) => <React.Fragment key={i}>{line}{i < arr.length - 1 && <br />}</React.Fragment>)}</React.Fragment>;
         }
         if ('functionCall' in part) {
             return <div key={index} className="text-accent-yellow font-mono text-xs">Waiting for confirmation to run: {part.functionCall.name}</div>;
@@ -219,10 +220,10 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
         <div className={`fixed inset-0 bg-overlay backdrop-blur-sm flex items-center justify-center z-50 ${isFullScreen ? '' : 'p-4'}`} ref={componentRootRef} tabIndex={-1}>
             <div
                 style={modalStyle}
-                className={`bg-background-secondary shadow-2xl border border-border-primary flex flex-col transition-all duration-300 ${isFullScreen ? 'w-full h-full rounded-none' : 'rounded-lg w-full max-w-3xl h-[90vh]' } p-6 modal-content-animation`}
+                className={`bg-background-secondary shadow-2xl border border-border-primary flex flex-col transition-all duration-300 ${isFullScreen ? 'w-full h-full rounded-none' : 'rounded-lg w-full max-w-5xl h-[90vh]' } p-6 modal-content-animation`}
             >
-                <header className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold flex items-center"><CoPilotIcon className="w-6 h-6 mr-3 text-accent-blue" /> Dev-Console Co-Pilot</h2>
+                <header className="flex justify-between items-center mb-4 flex-shrink-0">
+                    <h2 className="text-2xl font-bold flex items-center"><GeminiIcon className="w-8 h-8 mr-3" /> Dev-Console Co-Pilot</h2>
                     <div className="flex items-center space-x-2">
                         <button onClick={() => setIsFullScreen(!isFullScreen)} className="text-text-secondary hover:text-text-primary p-1">
                             {isFullScreen ? <ExitFullScreenIcon className="w-6 h-6" /> : <FullScreenIcon className="w-6 h-6" />}
@@ -230,20 +231,39 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                         <button onClick={onClose} className="text-text-secondary hover:text-text-primary p-1"><CloseIcon className="w-6 h-6" /></button>
                     </div>
                 </header>
-                <main className="flex-1 overflow-y-auto pr-2 space-y-4 font-mono text-sm">
+                <main className="flex-1 overflow-y-auto pr-2 space-y-6 font-mono text-sm min-h-0">
                     {messages.map((msg) => (
-                        <div key={msg.id} className="flex flex-col">
-                            <div className={`font-bold ${msg.role === 'user' ? 'text-accent-cyan' : 'text-accent-violet'}`}>
-                                {msg.role === 'user' ? 'User >' : 'Co-Pilot >'}
+                       <div key={msg.id} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                            {msg.role === 'model' ? (
+                                <GeminiIcon className="w-10 h-10 p-1 rounded-full flex-shrink-0 mt-1 bg-background" />
+                            ) : (
+                                profilePictureUrl ? (
+                                    <img src={profilePictureUrl} alt={displayName} className="w-10 h-10 rounded-full object-cover flex-shrink-0 mt-1" />
+                                ) : (
+                                    <div className="user-avatar mt-1">
+                                        {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+                                    </div>
+                                )
+                            )}
+                            <div className={`chat-bubble ${msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-model'}`}>
+                                <div className="prose prose-sm prose-invert max-w-none prose-p:my-0">
+                                     {msg.parts.map(renderPart)}
+                                </div>
                             </div>
-                            {msg.parts.map(renderPart)}
                         </div>
                     ))}
-                    {isLoading && <div className="text-accent-yellow animate-pulse">Co-Pilot is thinking...</div>}
+                    {isLoading && (
+                        <div className="flex items-start gap-3">
+                            <GeminiIcon className="w-10 h-10 p-1 rounded-full flex-shrink-0 mt-1 bg-background animate-pulse" />
+                            <div className="chat-bubble chat-bubble-model">
+                                <div className="text-text-secondary animate-pulse">Co-Pilot is thinking...</div>
+                            </div>
+                        </div>
+                    )}
                     <div ref={messagesEndRef} />
                 </main>
-                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm font-mono">{error}</div>}
-                <footer className="mt-4 relative">
+                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm font-mono flex-shrink-0">{error}</div>}
+                <footer className="mt-4 relative flex-shrink-0">
                      {showShortcutInfo && (
                         <div className="shortcut-popup-animation absolute bottom-full mb-2 w-full max-w-sm p-3 bg-background border border-border-primary rounded-lg shadow-lg">
                             <div className="flex justify-between items-center mb-2">
@@ -289,7 +309,7 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                             onKeyDown={handleKeyDown}
                             placeholder={isLoading ? "AI is busy... Add to queue with Ctrl+Enter" : "Ask a question (Ctrl+Enter to send)"}
                             rows={1}
-                            className="flex-grow bg-background focus:outline-none resize-none copilot-textarea font-mono text-sm"
+                            className="flex-grow bg-transparent focus:outline-none resize-none copilot-textarea font-mono text-sm"
                         />
                         <button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="p-2 bg-accent-blue rounded-md disabled:opacity-50">
                             <SendIcon className="w-5 h-5" />
@@ -300,7 +320,6 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                  {pendingAction && (
                     <ActionConfirmationModal
                         functionCall={pendingAction}
-                        // FIX: Wrap handleConfirmAction in an arrow function to match the expected prop type '() => void'.
                         onConfirm={() => handleConfirmAction(pendingAction)}
                         onCancel={handleCancelAction}
                         disabled={!siteData}

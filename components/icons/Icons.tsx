@@ -16,6 +16,11 @@ export const GoogleIcon: React.FC<SvgIconProps> = (props) => (
     </svg>
 );
 
+// ADD: New Gemini Icon for Co-Pilot
+export const GeminiIcon: React.FC<React.ImgHTMLAttributes<HTMLImageElement>> = (props) => (
+    <img src="https://ponsrischool.in/wp-content/uploads/2025/10/gemini-color.webp" alt="Gemini Icon" {...props} />
+);
+
 
 // FIX: Add all missing icon components
 export const HomeIcon: React.FC<SvgIconProps> = (props) => (

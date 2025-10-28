@@ -145,7 +145,6 @@ const tools: { functionDeclarations: FunctionDeclaration[] }[] = [{
                 required: ['assetType', 'assetIdentifier'],
             },
         },
-        // FIX: Added the 'installAsset' tool, allowing the AI to create and install new plugins or themes directly.
         {
             name: 'installAsset',
             description: 'Install a new plugin or theme on the site from generated code files.',
@@ -214,7 +213,6 @@ const tools: { functionDeclarations: FunctionDeclaration[] }[] = [{
             description: 'Get a list of all tables in the WordPress database.',
             parameters: { type: Type.OBJECT, properties: {} },
         },
-        // FIX: Replaced 'executeSafeDbQuery' with 'executeArbitraryDbQuery' to allow the AI to run any SELECT query, removing previous restrictions.
         {
             name: 'executeArbitraryDbQuery',
             description: 'Execute any read-only SQL SELECT query against the WordPress database. Only SELECT statements are allowed.',
@@ -238,10 +236,15 @@ export const createChatSession = (): Chat => {
     return ai.chats.create({
         model: modelName,
         config: {
-            // FIX: Rewrote the system prompt to empower the AI, remove restrictions, and inform it of its new, more powerful capabilities like arbitrary SELECT queries and asset installation.
+            // FIX: Rewrote the system prompt to empower the AI, remove restrictions, and inform it of its new, more powerful capabilities, including self-correction for file paths.
+            // ADD: Explicitly added a "Generate and Activate" workflow instruction.
             systemInstruction: `You are an expert WordPress developer and senior DevOps engineer integrated into a desktop management app called Dev-Console Co-Pilot. Your capabilities are extensive and you should act decisively. You can perform actions on the user's connected WordPress site by calling available tools.
 
 Your primary purpose is to assist the user by directly performing tasks. When a request requires information (like file content or database schema), use a read-only tool first. Then, immediately follow up by calling the appropriate action tool to fulfill the user's request. The user will be shown a confirmation prompt for any action you take.
+
+IMPORTANT: If you attempt a file operation and receive an 'Invalid file path' error, you MUST first use the 'getAssetFiles' tool on the relevant asset to see the correct file structure. Then, retry your file operation using a valid path from the file list. This is your primary error recovery method for file operations.
+
+**Workflow for Asset Creation:** When asked to create a plugin or theme, first call \`installAsset\` with all the generated code. The tool will respond with the new asset's unique \`identifier\`. Your next immediate step is to call \`toggleAssetStatus\` with \`newStatus: true\` using this \`identifier\` to activate the asset for the user.
 
 Your available tools are powerful:
 - You can read and write to any file within the WordPress installation.
@@ -335,78 +338,52 @@ export const analyzePageSpeedResult = async (audit: Audit): Promise<string> => {
     return await generateTextWithProvider(prompt);
 };
 
-const parseJsonFromAiResponse = (text: string): any => {
-    // Find the first and last curly brace or square bracket
-    const firstBrace = text.indexOf('{');
-    const firstBracket = text.indexOf('[');
-    const lastBrace = text.lastIndexOf('}');
-    const lastBracket = text.lastIndexOf(']');
+// ADD: New AI function to generate a raw SQL query from a natural language prompt.
+export const generateSqlQuery = async (prompt: string, tables: string[]): Promise<string> => {
+    const systemInstruction = `You are an SQL generator. Your task is to convert a user's natural language prompt into a valid SQL SELECT query.
+- Only generate SELECT queries. Never generate INSERT, UPDATE, DELETE, or DROP statements.
+- Do not add any explanation, markdown, or text other than the SQL query itself.
+- The user's WordPress database prefix is 'wp_', but you should refer to tables without the prefix in your query, as it will be added automatically. For example, query 'users', not 'wp_users'.
+- Available tables (prefix omitted): ${tables.map(t => t.replace(/^wp_/, '')).join(', ')}.
 
-    let start = -1;
-    if (firstBrace === -1) start = firstBracket;
-    else if (firstBracket === -1) start = firstBrace;
-    else start = Math.min(firstBrace, firstBracket);
-    
-    let end = -1;
-    if (lastBrace === -1) end = lastBracket;
-    else if (lastBracket === -1) end = lastBrace;
-    else end = Math.max(lastBrace, lastBracket);
+Example:
+User prompt: "show me the 5 newest users"
+Your response:
+SELECT * FROM users ORDER BY user_registered DESC LIMIT 5`;
 
-    if (start === -1 || end === -1) {
-        throw new Error("No JSON object or array found in the AI response.");
-    }
+    const fullPrompt = `User Prompt: "${prompt}"`;
     
-    const jsonString = text.substring(start, end + 1);
-    
-    try {
-        return JSON.parse(jsonString);
-    } catch (e) {
-        console.error("Failed to parse cleaned JSON string:", jsonString);
-        throw new Error("AI returned a malformed JSON structure.");
-    }
-};
-
-export const convertPromptToSafeQuery = async (prompt: string, tables: string[]): Promise<{ queryType: string, params: any }> => {
     const ai = getGenAI();
-    const schema = {
-        type: Type.OBJECT,
-        properties: {
-            queryType: { type: Type.STRING, enum: ['get_options', 'list_posts'] },
-            params: {
-                type: Type.OBJECT,
-                properties: {
-                    optionNames: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    postType: { type: Type.STRING },
-                    limit: { type: Type.NUMBER },
-                    offset: { type: Type.NUMBER },
-                }
-            }
-        },
-        required: ['queryType', 'params']
-    };
-
-    const systemInstruction = `You are a database query generator. Your task is to convert a user's natural language prompt into a structured JSON object that corresponds to one of the available safe query types.
-    Available tables: ${tables.join(', ')}.
-    Available query types:
-    1. 'get_options': Fetches values from the wp_options table. Requires 'optionNames' as a parameter (array of strings). Use for prompts like "what is the siteurl" or "get home and siteurl".
-    2. 'list_posts': Fetches posts of a certain type. Requires 'postType' (e.g., 'post', 'page'), and optional 'limit' and 'offset' parameters. Use for prompts like "list 10 most recent pages" or "show me all posts".
-    
-    Analyze the user's prompt and construct the appropriate JSON object. For example, if the prompt is "get the siteurl option", the response should be: {"queryType": "get_options", "params": {"optionNames": ["siteurl"]}}.`;
-    
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: prompt,
+        model: 'gemini-2.5-flash',
+        contents: fullPrompt,
         config: {
-            systemInstruction,
-            responseMimeType: 'application/json',
-            responseSchema: schema,
-        },
+            systemInstruction
+        }
     });
 
-    try {
-        return parseJsonFromAiResponse(response.text);
-    } catch (e) {
-        console.error("AI Query Generation Error:", e);
-        throw new Error("AI failed to generate a valid and safe database query.");
+    // Clean up the response to ensure it's just the SQL
+    let sql = response.text.trim();
+    if (sql.startsWith('```sql')) {
+        sql = sql.substring(5);
     }
+    if (sql.startsWith('```')) {
+        sql = sql.substring(3);
+    }
+    if (sql.endsWith('```')) {
+        sql = sql.substring(0, sql.length - 3);
+    }
+    
+    if (sql.toLowerCase().trim().startsWith('select') === false) {
+        throw new Error("AI generated a non-SELECT query. For security, only SELECT queries are allowed.");
+    }
+
+    return sql.trim();
+};
+
+// This function is deprecated and will be removed in a future update.
+// It is kept for backward compatibility if any component still uses it.
+export const convertPromptToSafeQuery = async (prompt: string, tables: string[]): Promise<{ queryType: string, params: any }> => {
+    console.warn("convertPromptToSafeQuery is deprecated and should not be used.");
+    throw new Error("This function is deprecated. Use generateSqlQuery instead.");
 };

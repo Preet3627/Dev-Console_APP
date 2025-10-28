@@ -2,6 +2,8 @@
 
 
 
+
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -189,6 +191,33 @@ const createTables = async (connection) => {
 
     // Drop the old single-site table if it exists
     await connection.query('DROP TABLE IF EXISTS site_data;');
+};
+
+// ADD: Helper function to recursively create directories via WebDAV for Nextcloud.
+const ensureDavPathExists = async (baseDavUrl, path, authHeader) => {
+    const parts = path.split('/').filter(p => p && p !== '.');
+    let currentPath = '';
+    for (const part of parts) {
+        currentPath += (currentPath ? '/' : '') + part;
+        const checkResponse = await fetch(`${baseDavUrl}/${currentPath}`, {
+            method: 'PROPFIND',
+            headers: { 'Authorization': authHeader, 'Depth': '0' },
+        });
+
+        if (checkResponse.status === 404) {
+            const mkcolResponse = await fetch(`${baseDavUrl}/${currentPath}`, {
+                method: 'MKCOL',
+                headers: { 'Authorization': authHeader },
+            });
+            // A 405 Method Not Allowed can happen if the directory was created by another process
+            // between our PROPFIND and MKCOL calls. We can safely ignore it and continue.
+            if (mkcolResponse.status !== 201 && mkcolResponse.status !== 405) { 
+                throw new Error(`Failed to create directory '${currentPath}'. Status: ${mkcolResponse.status}`);
+            }
+        } else if (!checkResponse.ok && checkResponse.status !== 207) { // 207 is success for PROPFIND
+             throw new Error(`Failed to check directory '${currentPath}'. Status: ${checkResponse.status}`);
+        }
+    }
 };
 
 
@@ -710,7 +739,8 @@ apiV1Router.post('/app-seo', authenticateToken, isAdmin, async (req, res) => {
 // --- PLUGIN UPDATER ---
 apiV1Router.get('/connector-plugin/latest', authenticateToken, (req, res) => {
     try {
-        const versionMatch = pluginSourceCode.match(/Version:\\s*(.*)/);
+        // FIX: Corrected regex to properly parse the version number from the plugin header.
+        const versionMatch = pluginSourceCode.match(/Version:\s*([0-9.]+)/);
         const version = versionMatch ? versionMatch[1].trim() : '0.0.0';
         res.json({
             version: version,
@@ -861,23 +891,8 @@ apiV1Router.post('/nextcloud', authenticateToken, async (req, res) => {
             const siteFolderName = siteUrl.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9.-]/g, '_');
             const fullPath = `${rootBackupPath}/${siteFolderName}`;
 
-            // Check/create root backup directory
-            const rootDirCheck = await fetch(`${davUrl}/${rootBackupPath}`, { method: 'PROPFIND', headers: { 'Authorization': authHeader, 'Depth': '0' } });
-            if (rootDirCheck.status === 404) {
-                const mkcolResponse = await fetch(`${davUrl}/${rootBackupPath}`, { method: 'MKCOL', headers: { 'Authorization': authHeader } });
-                if (mkcolResponse.status !== 201 && mkcolResponse.status !== 405) {
-                    return res.status(mkcolResponse.status).json({ success: false, details: `Failed to create root backup directory '${rootBackupPath}'. Status: ${mkcolResponse.status}` });
-                }
-            }
-            
-            // Check/create site-specific directory
-            const siteDirCheck = await fetch(`${davUrl}/${fullPath}`, { method: 'PROPFIND', headers: { 'Authorization': authHeader, 'Depth': '0' } });
-            if (siteDirCheck.status === 404) {
-                const mkcolResponse = await fetch(`${davUrl}/${fullPath}`, { method: 'MKCOL', headers: { 'Authorization': authHeader } });
-                if (mkcolResponse.status !== 201 && mkcolResponse.status !== 405) {
-                    return res.status(mkcolResponse.status).json({ success: false, details: `Failed to create site backup directory '${fullPath}'. Status: ${mkcolResponse.status}` });
-                }
-            }
+            // FIX: Use the robust `ensureDavPathExists` helper to create the full directory structure.
+            await ensureDavPathExists(davUrl, fullPath, authHeader);
 
             const uploadResponse = await fetch(`${davUrl}/${fullPath}/${fileName}`, {
                 method: 'PUT',

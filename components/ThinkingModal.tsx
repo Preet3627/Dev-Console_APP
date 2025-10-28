@@ -1,5 +1,5 @@
-import React from 'react';
-import { CloseIcon, GenerateIcon } from './icons/Icons.tsx';
+import React, { useState } from 'react';
+import { CloseIcon, GenerateIcon, FullScreenIcon, ExitFullScreenIcon } from './icons/Icons.tsx';
 
 interface ThinkingModalProps {
     title: string;
@@ -26,21 +26,28 @@ const ThinkingModal: React.FC<ThinkingModalProps> = ({
     children,
     modalBgColor
 }) => {
+    const [isFullScreen, setIsFullScreen] = useState(false);
     const modalStyle = modalBgColor ? { backgroundColor: modalBgColor } : {};
+
     return (
-        <div className="fixed inset-0 bg-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className={`fixed inset-0 bg-overlay backdrop-blur-sm flex items-center justify-center z-50 ${isFullScreen ? '' : 'p-4'}`}>
             <div
                 style={modalStyle}
-                className="bg-background-secondary rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] border border-border-primary flex flex-col p-6 modal-content-animation"
+                className={`bg-background-secondary shadow-2xl border border-border-primary flex flex-col transition-all duration-300 ${isFullScreen ? 'w-full h-full rounded-none' : 'rounded-lg w-full max-w-5xl h-[90vh]'} p-6 modal-content-animation`}
             >
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold flex items-center">
                         <GenerateIcon className={`w-6 h-6 mr-3 text-accent-green ${isLoading ? 'animate-spin' : ''}`} />
                         {title}
                     </h2>
-                    <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
-                        <CloseIcon className="w-6 h-6" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                         <button onClick={() => setIsFullScreen(!isFullScreen)} className="text-text-secondary hover:text-text-primary p-1">
+                            {isFullScreen ? <ExitFullScreenIcon className="w-6 h-6" /> : <FullScreenIcon className="w-6 h-6" />}
+                        </button>
+                        <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
+                            <CloseIcon className="w-6 h-6" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="text-center my-4 p-3 bg-background border border-border-primary rounded-md">

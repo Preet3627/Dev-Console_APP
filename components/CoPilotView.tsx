@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SiteData, ChatMessage, Part, FunctionCallPart, FunctionResponsePart } from '../types';
-import { SendIcon } from './icons/Icons';
+import { SiteData, ChatMessage, Part, FunctionResponsePart } from '../types';
+import { SendIcon, GeminiIcon } from './icons/Icons';
 import { createChatSession, isAiConfigured } from '../services/aiService';
 import { executeTool } from '../services/toolExecutor';
 import ActionConfirmationModal from './ActionConfirmationModal';
 
 interface CoPilotViewProps {
     siteData: SiteData | null;
+    displayName: string;
+    profilePictureUrl: string | null;
 }
 
-const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
+const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData, displayName, profilePictureUrl }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +37,6 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
     useEffect(() => {
         if (isAiConfigured()) {
             chatSessionRef.current = createChatSession();
-            // FIX: Updated the initial message to be more informative about the AI's advanced capabilities.
             setMessages([{
                 id: 'initial-message',
                 role: 'model',
@@ -46,7 +47,6 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
         }
     }, []);
 
-    // FIX: Refactored the entire chat handling logic to support a full function-calling loop, allowing the AI to use tools and respond with the results.
     const processStream = async (streamPromise: Promise<any>) => {
         setIsLoading(true);
         setError(null);
@@ -119,10 +119,7 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
             const functionResponsePart: FunctionResponsePart = {
                 functionResponse: {
                     name: actionToExecute.name,
-                    response: {
-                        name: actionToExecute.name,
-                        content: result,
-                    }
+                    response: result
                 }
             };
 
@@ -152,7 +149,7 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
 
     const renderPart = (part: Part, index: number) => {
         if ('text' in part) {
-            return <div key={index} className="prose prose-sm prose-invert max-w-none prose-p:font-mono" dangerouslySetInnerHTML={{ __html: part.text.replace(/\n/g, '<br />') }}></div>;
+            return <React.Fragment key={index}>{part.text.split('\n').map((line, i, arr) => <React.Fragment key={i}>{line}{i < arr.length - 1 && <br />}</React.Fragment>)}</React.Fragment>;
         }
         if ('functionCall' in part) {
             return <div key={index} className="text-accent-yellow font-mono text-xs">Waiting for confirmation to run: {part.functionCall.name}</div>;
@@ -164,20 +161,39 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
         <div className="flex flex-col h-full">
             <h1 className="text-4xl font-bold mb-4">Dev-Console Co-Pilot Chat</h1>
             <div className="bg-background-secondary rounded-lg border border-border-primary flex flex-col flex-grow p-4">
-                <main className="flex-1 overflow-y-auto pr-2 space-y-4 font-mono text-sm">
+                <main className="flex-1 overflow-y-auto pr-2 space-y-6 font-mono text-sm mx-auto w-full max-w-4xl">
                      {messages.map((msg) => (
-                        <div key={msg.id} className="flex flex-col">
-                           <div className={`font-bold ${msg.role === 'user' ? 'text-accent-cyan' : 'text-accent-violet'}`}>
-                                {msg.role === 'user' ? 'User >' : 'Co-Pilot >'}
+                        <div key={msg.id} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                            {msg.role === 'model' ? (
+                                <GeminiIcon className="w-10 h-10 p-1 rounded-full flex-shrink-0 mt-1 bg-background" />
+                            ) : (
+                                profilePictureUrl ? (
+                                    <img src={profilePictureUrl} alt={displayName} className="w-10 h-10 rounded-full object-cover flex-shrink-0 mt-1" />
+                                ) : (
+                                    <div className="user-avatar mt-1">
+                                        {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+                                    </div>
+                                )
+                            )}
+                            <div className={`chat-bubble ${msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-model'}`}>
+                               <div className="prose prose-sm prose-invert max-w-none prose-p:my-0">
+                                     {msg.parts.map(renderPart)}
+                                </div>
                             </div>
-                            {msg.parts.map(renderPart)}
                         </div>
                     ))}
-                    {isLoading && <div className="text-accent-yellow animate-pulse">Co-Pilot is thinking...</div>}
+                    {isLoading && (
+                        <div className="flex items-start gap-4">
+                            <GeminiIcon className="w-10 h-10 p-1 rounded-full flex-shrink-0 mt-1 bg-background animate-pulse" />
+                            <div className="chat-bubble chat-bubble-model">
+                                <div className="text-text-secondary animate-pulse">Co-Pilot is thinking...</div>
+                            </div>
+                        </div>
+                    )}
                     <div ref={messagesEndRef} />
                 </main>
-                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm font-mono">{error}</div>}
-                <footer className="mt-4">
+                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm font-mono mx-auto w-full max-w-4xl">{error}</div>}
+                <footer className="mt-4 mx-auto w-full max-w-4xl">
                     <div className="flex items-center space-x-2 bg-background p-2 border border-border-primary rounded-lg">
                         <textarea
                             ref={textareaRef}

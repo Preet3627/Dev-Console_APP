@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import FileTree from './FileTree';
 import FileHistoryModal from './FileHistoryModal';
 import { CloseIcon, HistoryIcon, FullScreenIcon, ExitFullScreenIcon } from './icons/Icons';
@@ -8,11 +8,26 @@ import { Asset, AssetFile, SiteData } from '../types';
 interface CodeEditorProps {
     siteData: SiteData;
     asset: Asset;
-    // FIX: Add optional initialFile prop to allow opening a specific file on mount.
     initialFile?: AssetFile;
     onClose: () => void;
     modalBgColor?: string;
 }
+
+const getLanguageFromFileName = (fileName: string): string => {
+    const extension = fileName.split('.').pop() || '';
+    switch (extension) {
+        case 'php': return 'php';
+        case 'js': return 'javascript';
+        case 'css': return 'css';
+        case 'html': return 'html';
+        case 'json': return 'json';
+        case 'md': return 'markdown';
+        case 'sql': return 'sql';
+        case 'sh': return 'bash';
+        case 'xml': return 'xml';
+        default: return 'plaintext';
+    }
+};
 
 const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, onClose, modalBgColor }) => {
     const [files, setFiles] = useState<AssetFile[]>([]);
@@ -24,6 +39,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
     const [error, setError] = useState<string | null>(null);
     const [showHistory, setShowHistory] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
+
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const preRef = useRef<HTMLElement>(null);
+    const codeRef = useRef<HTMLElement>(null);
 
     const modalStyle = modalBgColor ? { backgroundColor: modalBgColor } : {};
 
@@ -47,7 +66,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
         setError(null);
         try {
             const fetchedFiles = await getAssetFiles(siteData, asset.identifier, asset.type);
-            setFiles(fetchedFiles);
+            setFiles(fetchedFiles.filter(f => f.type === 'file').map(f => ({ name: f.path })));
         } catch (err) {
             setError(`Failed to load files for ${asset.name}.`);
             console.error(err);
@@ -60,7 +79,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
         fetchFiles();
     }, [fetchFiles]);
 
-    // FIX: Add useEffect to handle the initialFile prop.
     useEffect(() => {
         if (initialFile) {
             handleSelectFile(initialFile);
@@ -86,7 +104,24 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
             handleSelectFile(selectedFile);
         }
     };
+
+    const handleScroll = () => {
+        if (preRef.current && textareaRef.current) {
+            preRef.current.scrollTop = textareaRef.current.scrollTop;
+            preRef.current.scrollLeft = textareaRef.current.scrollLeft;
+        }
+    };
     
+    useEffect(() => {
+        if (codeRef.current) {
+            codeRef.current.textContent = fileContent;
+            if (window.hljs) {
+                window.hljs.highlightElement(codeRef.current);
+            }
+        }
+    }, [fileContent]);
+
+    const language = selectedFile ? getLanguageFromFileName(selectedFile.name) : 'plaintext';
     const isDirty = fileContent !== originalContent;
 
     return (
@@ -114,14 +149,22 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
                         {isLoading ? <div className="p-4">Loading files...</div> : <FileTree files={files} selectedFile={selectedFile} onSelectFile={handleSelectFile} />}
                     </div>
                     <div className="w-3/4 flex flex-col">
-                        <div className="flex-grow relative">
+                        <div className="flex-grow relative code-editor-wrapper">
                              <textarea
+                                ref={textareaRef}
                                 value={fileContent}
                                 onChange={(e) => setFileContent(e.target.value)}
-                                className="w-full h-full p-4 bg-background border border-border-primary rounded-md font-mono text-sm resize-none code-editor-textarea"
+                                onScroll={handleScroll}
+                                className="code-editor-textarea-real"
                                 placeholder="Select a file to view its content."
                                 disabled={!selectedFile}
+                                spellCheck="false"
                             />
+                            <pre ref={preRef} className="code-editor-highlight" aria-hidden="true">
+                                <code ref={codeRef} className={`language-${language}`}>
+                                    {/* Content is injected via useEffect */}
+                                </code>
+                            </pre>
                         </div>
                         <div className="flex justify-between items-center mt-4">
                             <div>

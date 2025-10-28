@@ -2,8 +2,8 @@ import React from 'react';
 import { View } from '../App';
 import { 
     HomeIcon, PluginIcon, ThemeIcon, DatabaseIcon, GenerateIcon, 
-    ShieldIcon, SpeedIcon, FileIcon, SettingsIcon, LogoutIcon, CoPilotIcon,
-    BackupIcon, PM_SHRI_Logo, ServerIcon, SeoIcon
+    ShieldIcon, SpeedIcon, FileIcon, SettingsIcon, LogoutIcon,
+    BackupIcon, PM_SHRI_Logo, ServerIcon, SeoIcon, GeminiIcon
 } from './icons/Icons';
 
 interface SidebarProps {
@@ -17,7 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout, isAdm
 
     const navItems: { view: View; label: string; icon: React.FC<any>; adminOnly?: boolean }[] = [
         { view: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-        { view: 'copilot', label: 'Co-Pilot Chat', icon: CoPilotIcon },
+        { view: 'copilot', label: 'Co-Pilot Chat', icon: GeminiIcon },
         { view: 'plugins', label: 'Plugins', icon: PluginIcon },
         { view: 'themes', label: 'Themes', icon: ThemeIcon },
         { view: 'fileManager', label: 'File Manager', icon: FileIcon },

@@ -69,21 +69,26 @@ export interface AssetFile {
     content?: string;
 }
 
+// ADD: New type for file manager entries to distinguish files from directories.
+export interface FileSystemEntry {
+    name: string;
+    path: string;
+    type: 'file' | 'directory';
+}
+
+
 export interface BackupFile {
     path: string;
     timestamp: string;
 }
 
-// FIX: Redefined chat message types to properly support the full Gemini function calling loop, including text, function calls, and function responses. This is critical for showing tool output in the chat.
+// FIX: Redefined chat message types to properly support the full Gemini function calling loop. This is critical for showing tool output in the chat and resolving AI errors.
 export interface TextPart { text: string; }
 export interface FunctionCallPart { functionCall: any; }
 export interface FunctionResponsePart {
   functionResponse: {
     name: string;
-    response: {
-        name: string;
-        content: any;
-    };
+    response: any;
   };
 }
 export type Part = TextPart | FunctionCallPart | FunctionResponsePart;

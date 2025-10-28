@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AssetFile } from '../types';
 
 interface CodeViewerProps {
@@ -7,8 +7,29 @@ interface CodeViewerProps {
     onSelectFile: (fileName: string) => void;
 }
 
+const getLanguageFromFileName = (fileName: string): string => {
+    const extension = fileName.split('.').pop() || '';
+    switch (extension) {
+        case 'php': return 'php';
+        case 'js': return 'javascript';
+        case 'css': return 'css';
+        case 'html': return 'html';
+        case 'json': return 'json';
+        default: return 'plaintext';
+    }
+};
+
 const CodeViewer: React.FC<CodeViewerProps> = ({ files, selectedFileName, onSelectFile }) => {
     const selectedFile = files.find(f => f.name === selectedFileName);
+    const codeRef = useRef<HTMLElement>(null);
+
+    useEffect(() => {
+        if (codeRef.current && window.hljs) {
+            window.hljs.highlightElement(codeRef.current);
+        }
+    }, [selectedFile]);
+
+    const language = selectedFile ? getLanguageFromFileName(selectedFile.name) : 'plaintext';
 
     return (
         <div className="flex space-x-4 h-full">
@@ -27,8 +48,8 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ files, selectedFileName, onSele
                 </ul>
             </div>
             <div className="w-2/3 bg-background p-4 rounded-md border border-border-primary overflow-auto">
-                <pre className="text-sm font-mono whitespace-pre">
-                    <code>
+                <pre className="text-sm font-mono whitespace-pre h-full">
+                    <code ref={codeRef} className={`language-${language}`}>
                         {selectedFile?.content || 'Select a file to view its code.'}
                     </code>
                 </pre>

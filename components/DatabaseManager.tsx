@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SiteData } from '../types';
-import { getDbTables, executeSafeDbQuery } from '../services/wordpressService';
-import { convertPromptToSafeQuery } from '../services/aiService';
+import { getDbTables, executeArbitraryDbQuery } from '../services/wordpressService';
+import { generateSqlQuery } from '../services/aiService';
 import { DatabaseIcon, ExecuteIcon, GenerateIcon } from './icons/Icons';
 
 const DatabaseManager: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
@@ -10,6 +10,8 @@ const DatabaseManager: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
     const [results, setResults] = useState<any[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [generatedSql, setGeneratedSql] = useState('');
+    const [showSqlConfirm, setShowSqlConfirm] = useState(false);
     
     const fetchTables = useCallback(async () => {
         try {
@@ -24,17 +26,31 @@ const DatabaseManager: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
         fetchTables();
     }, [fetchTables]);
 
-    const handleRunAiQuery = async () => {
+    const handleGenerateSqlQuery = async () => {
         if (!aiPrompt) return;
         setIsLoading(true);
         setError(null);
         setResults(null);
         try {
-            const safeQuery = await convertPromptToSafeQuery(aiPrompt, tables);
-            const data = await executeSafeDbQuery(siteData, safeQuery.queryType, safeQuery.params);
+            const sql = await generateSqlQuery(aiPrompt, tables);
+            setGeneratedSql(sql);
+            setShowSqlConfirm(true);
+        } catch (err) {
+            setError(`AI failed to generate a valid query. Please check your prompt and API key. Error: ${(err as Error).message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleExecuteConfirmedQuery = async () => {
+        setShowSqlConfirm(false);
+        setIsLoading(true);
+        setError(null);
+        try {
+            const data = await executeArbitraryDbQuery(siteData, generatedSql);
             setResults(data);
         } catch (err) {
-             setError(`Failed to execute query. Please check your AI prompt and API key. Error: ${(err as Error).message}`);
+            setError(`Query failed to execute. Error: ${(err as Error).message}`);
         } finally {
             setIsLoading(false);
         }
@@ -92,24 +108,24 @@ const DatabaseManager: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
                 </div>
 
                 <div className="md:col-span-3 space-y-6">
-                     <div className="bg-background-secondary p-6 rounded-lg border border-border-primary">
+                     <div className="glass-card p-6">
                         <h2 className="text-lg font-semibold mb-2 flex items-center">
                             <GenerateIcon className="w-5 h-5 mr-2 text-accent-green" />
                             AI Query Assistant
                         </h2>
-                        <p className="text-sm text-text-secondary mb-3">Describe the data you want to retrieve in plain English. The AI will use safe, predefined queries to fetch it.</p>
+                        <p className="text-sm text-text-secondary mb-3">Describe the data you want to retrieve. The AI will generate a SQL query for you to review and execute.</p>
                         <div className="flex space-x-2">
                            <input
                                 type="text"
                                 value={aiPrompt}
                                 onChange={(e) => setAiPrompt(e.target.value)}
-                                placeholder="e.g., Show me the 5 most recent users"
-                                className="flex-grow p-2 bg-background border border-border-primary rounded-md"
+                                placeholder="e.g., Show me the 5 newest users"
+                                className="input-field"
                                 disabled={isLoading}
                            />
-                           <button onClick={handleRunAiQuery} disabled={isLoading || !aiPrompt} className="px-4 py-2 bg-accent-green hover:bg-accent-green-hover text-white rounded-md disabled:opacity-50 flex items-center">
-                                <ExecuteIcon className="w-4 h-4 mr-2"/>
-                               {isLoading ? 'Running...' : 'Run AI Query'}
+                           <button onClick={handleGenerateSqlQuery} disabled={isLoading || !aiPrompt} className="btn btn-primary flex items-center">
+                                <GenerateIcon className="w-4 h-4 mr-2"/>
+                               {isLoading ? 'Generating...' : 'Generate SQL'}
                            </button>
                         </div>
                     </div>
@@ -121,6 +137,23 @@ const DatabaseManager: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
                     </div>
                 </div>
             </div>
+
+            {showSqlConfirm && (
+                <div className="fixed inset-0 bg-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="glass-card w-full max-w-2xl p-6 modal-content-animation">
+                        <h2 className="text-xl font-bold">Confirm SQL Query</h2>
+                        <p className="text-text-secondary mt-2 mb-4">The AI generated the following query. Please review it before execution.</p>
+                        <pre className="bg-background p-4 rounded-md border border-border-primary font-mono text-sm overflow-x-auto"><code>{generatedSql}</code></pre>
+                        <div className="flex justify-end space-x-4 mt-6">
+                            <button onClick={() => setShowSqlConfirm(false)} className="btn btn-secondary">Cancel</button>
+                            <button onClick={handleExecuteConfirmedQuery} className="btn btn-primary flex items-center">
+                                <ExecuteIcon className="w-4 h-4 mr-2"/>
+                                Execute Query
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

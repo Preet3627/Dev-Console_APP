@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -431,7 +432,7 @@ const App: React.FC = () => {
             case 'backupRestore':
                 return <BackupRestore siteData={currentSite!} />;
             case 'copilot':
-                return <CoPilotView siteData={currentSite} />;
+                return <CoPilotView siteData={currentSite} displayName={displayName} profilePictureUrl={profilePictureUrl} />;
             // ADD: Case for the new SeoManager view.
             case 'seo':
                 return <SeoManager siteData={currentSite!} />;
@@ -522,7 +523,7 @@ const App: React.FC = () => {
             )}
 
             {showConnectorModal && <ConnectorSetupModal onClose={() => setShowConnectorModal(false)} onSiteAdded={handleSiteAdded} />}
-            {showCoPilotModal && <CoPilot onClose={() => setShowCoPilotModal(false)} siteData={currentSite} initialPrompt={coPilotInitialPrompt} modalBgColor={modalBgColor} />}
+            {showCoPilotModal && <CoPilot onClose={() => setShowCoPilotModal(false)} siteData={currentSite} initialPrompt={coPilotInitialPrompt} modalBgColor={modalBgColor} displayName={displayName} profilePictureUrl={profilePictureUrl} />}
             {showEditor && assetToEdit && <CodeEditor siteData={currentSite!} asset={assetToEdit} initialFile={fileToEdit || undefined} onClose={() => setShowEditor(false)} modalBgColor={modalBgColor} />}
             {showPluginGenerator && <PluginGeneratorModal onClose={() => setShowPluginGenerator(false)} siteData={currentSite} modalBgColor={modalBgColor} />}
             {showThemeGenerator && <ThemeGeneratorModal onClose={() => setShowThemeGenerator(false)} siteData={currentSite} modalBgColor={modalBgColor} />}
