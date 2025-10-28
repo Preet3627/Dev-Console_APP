@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SiteData, ChatMessage } from '../types';
+import { SiteData, ChatMessage, Part, FunctionCallPart, FunctionResponsePart } from '../types';
 import { SendIcon } from './icons/Icons';
 import { createChatSession, isAiConfigured } from '../services/aiService';
-import ThinkingAnimation from './ThinkingAnimation';
-import ActionConfirmationCard from './ActionConfirmationCard';
 import { executeTool } from '../services/toolExecutor';
+import ActionConfirmationModal from './ActionConfirmationModal';
 
 interface CoPilotViewProps {
     siteData: SiteData | null;
@@ -18,6 +17,7 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
     const chatSessionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [pendingAction, setPendingAction] = useState<any | null>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -25,12 +25,9 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
 
     useEffect(scrollToBottom, [messages]);
     
-    // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
-            // Reset height to auto to allow shrinking
             textareaRef.current.style.height = 'auto';
-            // Set height to scrollHeight to expand
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
     }, [input]);
@@ -38,101 +35,112 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
     useEffect(() => {
         if (isAiConfigured()) {
             chatSessionRef.current = createChatSession();
+            // FIX: Updated the initial message to be more informative about the AI's advanced capabilities.
             setMessages([{
                 id: 'initial-message',
                 role: 'model',
-                parts: [{ text: "Hello! I'm your Dev-Console Co-Pilot. How can I assist you with your WordPress site today?" }],
+                parts: [{ text: "Hello! I'm your Dev-Console Co-Pilot, now with advanced capabilities. I can read/write files, manage plugins, and execute custom database queries. How can I assist you?" }],
             }]);
         } else {
-            setError("AI Service is not configured. Please add your Gemini API Key in Settings.");
+            setError("AI Service is not configured. Please add your API Key in Settings.");
         }
     }, []);
 
-    const handleSend = async () => {
-        if (!input.trim() || isLoading || !isAiConfigured()) return;
-
-        const userMessage: ChatMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            parts: [{ text: input }],
-        };
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
+    // FIX: Refactored the entire chat handling logic to support a full function-calling loop, allowing the AI to use tools and respond with the results.
+    const processStream = async (streamPromise: Promise<any>) => {
         setIsLoading(true);
         setError(null);
 
+        let currentModelMessageId = Date.now().toString();
+        setMessages(prev => [...prev, { id: currentModelMessageId, role: 'model', parts: [{ text: '' }] }]);
+
         try {
-            const stream = await chatSessionRef.current.sendMessageStream({ message: userMessage.parts[0].text });
-            let modelResponse = '';
-            let currentToolCalls: any[] = [];
-            
-            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', parts: [{ text: '' }], toolCalls: [] }]);
+            const stream = await streamPromise;
+            let modelResponseText = '';
+            let functionCalls: any[] = [];
 
             for await (const chunk of stream) {
                 const chunkText = chunk.text;
-                const functionCalls = chunk.functionCalls;
-
                 if (chunkText) {
-                    modelResponse += chunkText;
-                     setMessages(prev => {
-                        const newMessages = [...prev];
-                        newMessages[newMessages.length - 1].parts[0].text = modelResponse;
-                        return newMessages;
-                    });
+                    modelResponseText += chunkText;
+                    setMessages(prev => prev.map(msg => msg.id === currentModelMessageId ? { ...msg, parts: [{ text: modelResponseText }] } : msg));
                 }
-                if (functionCalls) {
-                    currentToolCalls = functionCalls;
-                    setMessages(prev => {
-                        const newMessages = [...prev];
-                        newMessages[newMessages.length - 1].toolCalls = currentToolCalls;
-                        return newMessages;
-                    });
+                if (chunk.functionCalls) {
+                    functionCalls.push(...chunk.functionCalls);
                 }
+            }
+
+            if (functionCalls.length > 0) {
+                setPendingAction(functionCalls[0]);
             }
         } catch (err) {
-            let errorMessage = (err as Error).message;
-            try {
-                // Attempt to parse nested JSON error messages, common with some API clients
-                const errorJson = JSON.parse(errorMessage);
-                if (errorJson.error && errorJson.error.message) {
-                    errorMessage = errorJson.error.message;
-                }
-            } catch (e) {
-                // Not a JSON string, use the original message
-            }
-            setError(`An error occurred: ${errorMessage}`);
+            setError(`An error occurred: ${(err as Error).message}`);
         } finally {
             setIsLoading(false);
         }
     };
+    
+    const handleSend = async () => {
+        if (!input.trim() || isLoading || !isAiConfigured()) return;
 
-     const handleConfirmAction = async (toolCall: any, messageId: string) => {
-        if (!siteData) {
-            setError("Cannot execute action: Not connected to a WordPress site.");
+        const text = input;
+        setInput('');
+
+        setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'user',
+            parts: [{ text }],
+        }]);
+
+        await processStream(chatSessionRef.current.sendMessageStream({ message: text }));
+    };
+
+    const handleConfirmAction = async () => {
+        if (!pendingAction || !siteData) {
+            setError("Action could not be executed. No pending action or site is not connected.");
+            setPendingAction(null);
             return;
         }
 
+        const actionToExecute = { ...pendingAction };
+        setPendingAction(null);
         setIsLoading(true);
+        setError(null);
+        
+        setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'model',
+            parts: [{ text: `Executing \`${actionToExecute.name}\`...` }]
+        }]);
+
         try {
-            await executeTool(toolCall, siteData);
-            const systemMessage: ChatMessage = {
-                id: Date.now().toString(),
-                role: 'model',
-                parts: [{ text: `✅ Action Confirmed: \`${toolCall.name}\` was executed successfully.` }],
+            const result = await executeTool(actionToExecute, siteData);
+            
+            const functionResponsePart: FunctionResponsePart = {
+                functionResponse: {
+                    name: actionToExecute.name,
+                    response: {
+                        name: actionToExecute.name,
+                        content: result,
+                    }
+                }
             };
-             setMessages(prev => {
-                const updatedMessages = prev.map(msg => 
-                    msg.id === messageId 
-                    ? {...msg, toolCalls: msg.toolCalls?.filter(tc => tc.name !== toolCall.name) } 
-                    : msg
-                );
-                return [...updatedMessages, systemMessage];
-            });
+
+            await processStream(chatSessionRef.current.sendMessageStream({ parts: [functionResponsePart] as Part[] }));
+
         } catch (err) {
-            setError(`Action failed: ${(err as Error).message}`);
-        } finally {
+            setError(`Action \`${actionToExecute.name}\` failed: ${(err as Error).message}`);
             setIsLoading(false);
         }
+    };
+
+    const handleCancelAction = () => {
+        setPendingAction(null);
+        setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'model',
+            parts: [{ text: `Action cancelled by user.` }],
+        }]);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -142,31 +150,33 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
         }
     };
 
+    const renderPart = (part: Part, index: number) => {
+        if ('text' in part) {
+            return <div key={index} className="prose prose-sm prose-invert max-w-none prose-p:font-mono" dangerouslySetInnerHTML={{ __html: part.text.replace(/\n/g, '<br />') }}></div>;
+        }
+        if ('functionCall' in part) {
+            return <div key={index} className="text-accent-yellow font-mono text-xs">Waiting for confirmation to run: {part.functionCall.name}</div>;
+        }
+        return null;
+    };
+
     return (
         <div className="flex flex-col h-full">
             <h1 className="text-4xl font-bold mb-4">Dev-Console Co-Pilot Chat</h1>
             <div className="bg-background-secondary rounded-lg border border-border-primary flex flex-col flex-grow p-4">
-                <main className="flex-1 overflow-y-auto pr-2 space-y-4">
+                <main className="flex-1 overflow-y-auto pr-2 space-y-4 font-mono text-sm">
                      {messages.map((msg) => (
-                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`p-3 rounded-lg max-w-2xl ${msg.role === 'user' ? 'bg-accent-blue text-white' : 'bg-background'}`}>
-                                <div className="prose prose-sm prose-invert max-w-none" dangerouslySetInnerHTML={{__html: msg.parts[0].text.replace(/\n/g, '<br />')}}></div>
-                                {msg.toolCalls && msg.toolCalls.map((tc, idx) => (
-                                    <ActionConfirmationCard 
-                                        key={idx}
-                                        functionCall={tc} 
-                                        onConfirm={() => handleConfirmAction(tc, msg.id)} 
-                                        onCancel={() => setMessages(prev => prev.map(m => m.id === msg.id ? {...m, toolCalls: []} : m))}
-                                        disabled={!siteData}
-                                    />
-                                ))}
+                        <div key={msg.id} className="flex flex-col">
+                           <div className={`font-bold ${msg.role === 'user' ? 'text-accent-cyan' : 'text-accent-violet'}`}>
+                                {msg.role === 'user' ? 'User >' : 'Co-Pilot >'}
                             </div>
+                            {msg.parts.map(renderPart)}
                         </div>
                     ))}
-                    {isLoading && <ThinkingAnimation />}
+                    {isLoading && <div className="text-accent-yellow animate-pulse">Co-Pilot is thinking...</div>}
                     <div ref={messagesEndRef} />
                 </main>
-                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm text-accent-red/80">{error}</div>}
+                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm font-mono">{error}</div>}
                 <footer className="mt-4">
                     <div className="flex items-center space-x-2 bg-background p-2 border border-border-primary rounded-lg">
                         <textarea
@@ -174,9 +184,9 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder={isAiConfigured() ? "Ask a question... (Ctrl+Enter to send)" : "Please configure Gemini API Key in Settings"}
+                            placeholder={isAiConfigured() ? "Ask a question... (Ctrl+Enter to send)" : "Please configure your API Key in Settings"}
                             rows={1}
-                            className="flex-grow bg-transparent focus:outline-none resize-none copilot-textarea"
+                            className="flex-grow bg-transparent focus:outline-none resize-none copilot-textarea font-mono text-sm"
                             disabled={isLoading || !isAiConfigured()}
                         />
                         <button onClick={handleSend} disabled={isLoading || !input.trim() || !isAiConfigured()} className="p-2 bg-accent-blue rounded-md disabled:opacity-50">
@@ -185,6 +195,14 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData }) => {
                     </div>
                 </footer>
             </div>
+            {pendingAction && (
+                <ActionConfirmationModal
+                    functionCall={pendingAction}
+                    onConfirm={handleConfirmAction}
+                    onCancel={handleCancelAction}
+                    disabled={!siteData}
+                />
+            )}
         </div>
     );
 };

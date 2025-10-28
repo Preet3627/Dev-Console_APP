@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ConnectIcon, RefreshIcon, SignalIcon, LogoutIcon } from './icons/Icons';
 import { View } from '../App';
@@ -15,6 +16,24 @@ interface HeaderProps {
     onLogout: () => void;
     setView: (view: View) => void;
 }
+
+const SiteIcon: React.FC<{ site: SiteData | null }> = ({ site }) => {
+    const [hasError, setHasError] = useState(false);
+    const isConnected = !!site;
+    
+    useEffect(() => {
+        setHasError(false); // Reset error state when site changes
+    }, [site]);
+
+    if (!isConnected || hasError) {
+        return <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-accent-green' : 'bg-accent-red'} transition-colors`}></div>;
+    }
+
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(site.siteUrl).hostname}&sz=32`;
+
+    return <img src={faviconUrl} onError={() => setHasError(true)} alt="Site Favicon" className="w-4 h-4" />;
+};
+
 
 const Header: React.FC<HeaderProps> = ({ sites, currentSite, onOpenSiteSwitcher, onRefresh, onTestConnection, displayName, profilePictureUrl, onLogout, setView }) => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -35,7 +54,7 @@ const Header: React.FC<HeaderProps> = ({ sites, currentSite, onOpenSiteSwitcher,
     return (
         <header className="border-b border-border p-4 flex justify-between items-center flex-shrink-0">
             <button onClick={onOpenSiteSwitcher} className="flex items-center space-x-3 p-2 rounded-md hover:bg-background-secondary">
-                <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-accent-green' : 'bg-accent-red'} transition-colors`}></div>
+                <SiteIcon site={currentSite} />
                 <div className="text-left">
                     <span className="text-sm font-semibold">{currentSite ? currentSite.name : 'Not Connected'}</span>
                     {currentSite && <p className="text-xs text-text-secondary">{currentSite.siteUrl}</p>}

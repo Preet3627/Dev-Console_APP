@@ -57,6 +57,24 @@ body {
     border-radius: 6px;
 }
 
+/* ADD: Custom themed scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 4px;
+  border: 2px solid #111827;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #4b5563;
+}
+
+
 .prose a { color: #22d3ee; }
 .prose a:hover { text-decoration: underline; }
 .prose code { background-color: #111827; color: #facc15; padding: 0.2em 0.4em; border-radius: 6px; font-size: 0.9em; }
@@ -465,6 +483,7 @@ kbd {
 .z-10 { z-index: 10; }
 .z-40 { z-index: 40; }
 .z-50 { z-index: 50; }
+.z-60 { z-index: 60; }
 
 /* Borders & Rounded Corners */
 .border { border-width: 1px; }
@@ -528,4 +547,10 @@ kbd {
 .resize-none { resize: none; }
 .copilot-textarea {
     max-height: 7.5rem; /* Approx 5 lines of text with padding */
+}
+/* ADD: Styles for code editor textarea to enable horizontal scrolling */
+.code-editor-textarea {
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
 }

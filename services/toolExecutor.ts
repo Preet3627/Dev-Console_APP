@@ -1,4 +1,4 @@
-import { SiteData, AssetType } from '../types';
+import { SiteData, AssetType, AssetFile } from '../types';
 import * as wordpressService from './wordpressService';
 
 /**
@@ -16,8 +16,9 @@ export const executeTool = async (toolCall: { name: string; args: any }, siteDat
             return wordpressService.toggleAssetStatus(siteData, args.assetType as AssetType, args.assetIdentifier, args.newStatus);
         case 'deleteAsset':
             return wordpressService.deleteAsset(siteData, args.assetType as AssetType, args.assetIdentifier);
+        // FIX: The AI can now call installAsset directly, so we handle it here.
         case 'installAsset':
-            return wordpressService.installAsset(siteData, args.assetType as AssetType, args.assetName, args.files);
+            return wordpressService.installAsset(siteData, args.assetType as AssetType, args.assetName, args.files as AssetFile[]);
         case 'getAssetFiles':
             return wordpressService.getAssetFiles(siteData, args.assetIdentifier, args.assetType as AssetType);
         case 'readFileContent':
@@ -26,8 +27,9 @@ export const executeTool = async (toolCall: { name: string; args: any }, siteDat
             return wordpressService.writeFileContent(siteData, args.assetIdentifier, args.assetType as AssetType, args.relativePath, args.content);
         case 'getDbTables':
             return wordpressService.getDbTables(siteData);
-        case 'executeSafeDbQuery':
-            return wordpressService.executeSafeDbQuery(siteData, args.queryType, args.params);
+        // FIX: Replaced the old safe query with a new function to execute arbitrary SELECT queries.
+        case 'executeArbitraryDbQuery':
+            return wordpressService.executeArbitraryDbQuery(siteData, args.query);
         default:
             // If the tool is not found, throw an error.
             console.error(`Unknown tool called: ${name}`);

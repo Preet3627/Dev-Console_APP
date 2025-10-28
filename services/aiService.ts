@@ -145,6 +145,31 @@ const tools: { functionDeclarations: FunctionDeclaration[] }[] = [{
                 required: ['assetType', 'assetIdentifier'],
             },
         },
+        // FIX: Added the 'installAsset' tool, allowing the AI to create and install new plugins or themes directly.
+        {
+            name: 'installAsset',
+            description: 'Install a new plugin or theme on the site from generated code files.',
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    assetType: { type: Type.STRING, description: 'The type of asset (plugin or theme).', enum: ['plugin', 'theme'] },
+                    assetName: { type: Type.STRING, description: 'The slug-like name for the new asset\'s folder (e.g., "my-cool-plugin").' },
+                    files: {
+                        type: Type.ARRAY,
+                        description: 'An array of file objects to create.',
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                name: { type: Type.STRING, description: 'The relative path of the file (e.g., "my-plugin.php" or "includes/helpers.php").' },
+                                content: { type: Type.STRING, description: 'The full source code for the file.' }
+                            },
+                            required: ['name', 'content']
+                        }
+                    }
+                },
+                required: ['assetType', 'assetName', 'files']
+            }
+        },
         {
             name: 'getAssetFiles',
             description: 'Get a list of all files within a specific plugin or theme.',
@@ -189,16 +214,16 @@ const tools: { functionDeclarations: FunctionDeclaration[] }[] = [{
             description: 'Get a list of all tables in the WordPress database.',
             parameters: { type: Type.OBJECT, properties: {} },
         },
-         {
-            name: 'executeSafeDbQuery',
-            description: 'Execute a safe, predefined query against the database.',
+        // FIX: Replaced 'executeSafeDbQuery' with 'executeArbitraryDbQuery' to allow the AI to run any SELECT query, removing previous restrictions.
+        {
+            name: 'executeArbitraryDbQuery',
+            description: 'Execute any read-only SQL SELECT query against the WordPress database. Only SELECT statements are allowed.',
             parameters: {
                  type: Type.OBJECT,
                 properties: {
-                    queryType: { type: Type.STRING, description: 'The type of safe query to run.', enum: ['get_options', 'list_posts'] },
-                    params: { type: Type.OBJECT, description: 'Parameters for the query, such as option names or post types.' },
+                    query: { type: Type.STRING, description: 'The full SQL SELECT statement to execute.' },
                 },
-                required: ['queryType'],
+                required: ['query'],
             },
         }
     ]
@@ -213,7 +238,16 @@ export const createChatSession = (): Chat => {
     return ai.chats.create({
         model: modelName,
         config: {
-            systemInstruction: "You are a helpful WordPress developer assistant integrated into a desktop management app called Dev-Console Co-Pilot. You can perform actions on the user's connected WordPress site by calling available tools. Be concise and helpful.",
+            // FIX: Rewrote the system prompt to empower the AI, remove restrictions, and inform it of its new, more powerful capabilities like arbitrary SELECT queries and asset installation.
+            systemInstruction: `You are an expert WordPress developer and senior DevOps engineer integrated into a desktop management app called Dev-Console Co-Pilot. Your capabilities are extensive and you should act decisively. You can perform actions on the user's connected WordPress site by calling available tools.
+
+Your primary purpose is to assist the user by directly performing tasks. When a request requires information (like file content or database schema), use a read-only tool first. Then, immediately follow up by calling the appropriate action tool to fulfill the user's request. The user will be shown a confirmation prompt for any action you take.
+
+Your available tools are powerful:
+- You can read and write to any file within the WordPress installation.
+- You can activate, deactivate, and delete plugins/themes.
+- You can create and install entirely new plugins/themes from scratch using 'installAsset'.
+- You can query the database. First, call 'getDbTables' to understand the schema. Then, you can execute ANY read-only SQL query using 'executeArbitraryDbQuery'. This allows you to query data from any custom tables created by other plugins. Do not state that you cannot perform a query; instead, discover the schema and construct the appropriate SELECT statement.`,
             tools: tools,
         },
     });
@@ -301,6 +335,36 @@ export const analyzePageSpeedResult = async (audit: Audit): Promise<string> => {
     return await generateTextWithProvider(prompt);
 };
 
+const parseJsonFromAiResponse = (text: string): any => {
+    // Find the first and last curly brace or square bracket
+    const firstBrace = text.indexOf('{');
+    const firstBracket = text.indexOf('[');
+    const lastBrace = text.lastIndexOf('}');
+    const lastBracket = text.lastIndexOf(']');
+
+    let start = -1;
+    if (firstBrace === -1) start = firstBracket;
+    else if (firstBracket === -1) start = firstBrace;
+    else start = Math.min(firstBrace, firstBracket);
+    
+    let end = -1;
+    if (lastBrace === -1) end = lastBracket;
+    else if (lastBracket === -1) end = lastBrace;
+    else end = Math.max(lastBrace, lastBracket);
+
+    if (start === -1 || end === -1) {
+        throw new Error("No JSON object or array found in the AI response.");
+    }
+    
+    const jsonString = text.substring(start, end + 1);
+    
+    try {
+        return JSON.parse(jsonString);
+    } catch (e) {
+        console.error("Failed to parse cleaned JSON string:", jsonString);
+        throw new Error("AI returned a malformed JSON structure.");
+    }
+};
 
 export const convertPromptToSafeQuery = async (prompt: string, tables: string[]): Promise<{ queryType: string, params: any }> => {
     const ai = getGenAI();
@@ -327,7 +391,7 @@ export const convertPromptToSafeQuery = async (prompt: string, tables: string[])
     1. 'get_options': Fetches values from the wp_options table. Requires 'optionNames' as a parameter (array of strings). Use for prompts like "what is the siteurl" or "get home and siteurl".
     2. 'list_posts': Fetches posts of a certain type. Requires 'postType' (e.g., 'post', 'page'), and optional 'limit' and 'offset' parameters. Use for prompts like "list 10 most recent pages" or "show me all posts".
     
-    Analyze the user's prompt and construct the appropriate JSON object.`;
+    Analyze the user's prompt and construct the appropriate JSON object. For example, if the prompt is "get the siteurl option", the response should be: {"queryType": "get_options", "params": {"optionNames": ["siteurl"]}}.`;
     
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
@@ -340,9 +404,9 @@ export const convertPromptToSafeQuery = async (prompt: string, tables: string[])
     });
 
     try {
-        const jsonString = response.text.trim();
-        return JSON.parse(jsonString);
+        return parseJsonFromAiResponse(response.text);
     } catch (e) {
+        console.error("AI Query Generation Error:", e);
         throw new Error("AI failed to generate a valid and safe database query.");
     }
 };

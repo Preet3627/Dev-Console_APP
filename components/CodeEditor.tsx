@@ -118,7 +118,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
                              <textarea
                                 value={fileContent}
                                 onChange={(e) => setFileContent(e.target.value)}
-                                className="w-full h-full p-4 bg-background border border-border-primary rounded-md font-mono text-sm resize-none"
+                                className="w-full h-full p-4 bg-background border border-border-primary rounded-md font-mono text-sm resize-none code-editor-textarea"
                                 placeholder="Select a file to view its content."
                                 disabled={!selectedFile}
                             />

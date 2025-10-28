@@ -3,7 +3,7 @@ export const pluginSourceCode = `<?php
  * Plugin Name: Dev-Console Connector
  * Plugin URI: https://ponsrischool.in
  * Description: Securely connects your WordPress site to the Dev-Console application, enabling AI-powered management and development.
- * Version: 4.2.0
+ * Version: 4.3.0
  * Author: PM-SHRI
  * Author URI: https://ponsrischool.in
  */
@@ -136,75 +136,42 @@ final class Dev_Console_Connector {
         <?php
     }
 
-    /**
-     * Registers REST routes and hooks into the REST API to handle CORS correctly.
-     */
     public function register_rest_routes() {
-        // Filter 1: Tell WordPress's built-in OPTIONS handler to allow our custom header.
         add_filter('rest_allowed_cors_headers', function ($allowed_headers) {
             $allowed_headers[] = 'X-Access-Key';
             return array_unique($allowed_headers);
         });
-
-        // Filter 2: Add the correct Allow-Origin header to the actual POST response.
         add_filter('rest_post_dispatch', [$this, 'add_cors_headers_to_response'], 10, 3);
-
         register_rest_route('dev-console/v1', '/execute', [
-            'methods'  => 'POST', // WordPress automatically handles the OPTIONS preflight.
+            'methods'  => 'POST',
             'callback' => [$this, 'handle_rest_request'],
             'permission_callback' => [$this, 'permission_check'],
         ]);
     }
     
-    /**
-     * Adds the Access-Control-Allow-Origin header to the final response.
-     * Hooked into 'rest_post_dispatch'.
-     */
     public function add_cors_headers_to_response($result, $server, $request) {
-        // Only act on our specific route
-        if (strpos($request->get_route(), '/dev-console/v1/execute') === false) {
-            return $result;
-        }
+        if (strpos($request->get_route(), '/dev-console/v1/execute') === false) return $result;
         $origin = $request->get_header('origin');
         if (!$origin) return $result;
-
         $allowed_origin = $this->get_allowed_origin($origin);
-        if ($allowed_origin) {
-            $server->send_header('Access-Control-Allow-Origin', $allowed_origin);
-        }
+        if ($allowed_origin) $server->send_header('Access-Control-Allow-Origin', $allowed_origin);
         return $result;
     }
 
-    /**
-     * Checks permissions for the REST request (Origin and Access Key).
-     * Used as the 'permission_callback' for the route.
-     */
     public function permission_check(WP_REST_Request $request) {
-        // 1. Check Origin for browser requests
         $origin = $request->get_header('origin');
-        if ($origin && !$this->get_allowed_origin($origin)) {
-            return new WP_Error('rest_forbidden_origin', 'CORS: Origin not allowed.', ['status' => 403]);
-        }
-        // 2. Check Access Key
+        if ($origin && !$this->get_allowed_origin($origin)) return new WP_Error('rest_forbidden_origin', 'CORS: Origin not allowed.', ['status' => 403]);
         $access_key = $request->get_header('X-Access-Key');
-        if (!$access_key) {
-            return new WP_Error('auth_failed', 'Missing X-Access-Key header.', ['status' => 401]);
-        }
-        if (!hash_equals(get_option(self::ACCESS_KEY_OPTION), $access_key)) {
-            return new WP_Error('auth_failed', 'Invalid Access Key.', ['status' => 403]);
-        }
+        if (!$access_key) return new WP_Error('auth_failed', 'Missing X-Access-Key header.', ['status' => 401]);
+        if (!hash_equals(get_option(self::ACCESS_KEY_OPTION), $access_key)) return new WP_Error('auth_failed', 'Invalid Access Key.', ['status' => 403]);
         return true;
     }
 
-    /**
-     * Main handler for all incoming REST requests.
-     */
     public function handle_rest_request(WP_REST_Request $request) {
         $body = $request->get_json_params();
         $action = isset($body['action']) ? sanitize_key($body['action']) : '';
         $payload = isset($body['payload']) ? $body['payload'] : [];
         $method_name = '_action_' . $action;
-
         if (method_exists($this, $method_name)) {
             try {
                 $result = $this->{$method_name}($payload);
@@ -216,17 +183,19 @@ final class Dev_Console_Connector {
         return new WP_REST_Response(['success' => false, 'message' => 'Invalid action specified.'], 400);
     }
     
-    // --- START: Action Methods (No changes below this line, only helper methods) ---
+    // --- START: Action Methods ---
     private function _action_ping($payload) { return ['message' => 'pong', 'connector_version' => $this->get_plugin_version()]; }
-    private function _action_list_assets($payload) { if (!function_exists('get_plugins')) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; } if (!function_exists('wp_get_themes')) { require_once ABSPATH . 'wp-admin/includes/theme.php'; } $asset_type = $payload['assetType']; $results = []; if ($asset_type === 'plugin') { foreach (get_plugins() as $path => $details) { $results[] = ['type' => 'plugin', 'name' => $details['Name'], 'identifier' => $path, 'version' => $details['Version'], 'isActive' => is_plugin_active($path)]; } } elseif ($asset_type === 'theme') { $current_theme = get_stylesheet(); foreach (wp_get_themes() as $slug => $theme) { $results[] = ['type' => 'theme', 'name' => $theme->get('Name'), 'identifier' => $slug, 'version' => $theme->get('Version'), 'isActive' => ($slug === $current_theme)]; } } return $results; }
+    private function _action_list_assets($payload) { if (!function_exists('get_plugins')) require_once ABSPATH . 'wp-admin/includes/plugin.php'; if (!function_exists('wp_get_themes')) require_once ABSPATH . 'wp-admin/includes/theme.php'; $asset_type = $payload['assetType']; $results = []; if ($asset_type === 'plugin') { foreach (get_plugins() as $path => $details) { $results[] = ['type' => 'plugin', 'name' => $details['Name'], 'identifier' => $path, 'version' => $details['Version'], 'isActive' => is_plugin_active($path)]; } } elseif ($asset_type === 'theme') { $current_theme = get_stylesheet(); foreach (wp_get_themes() as $slug => $theme) { $results[] = ['type' => 'theme', 'name' => $theme->get('Name'), 'identifier' => $slug, 'version' => $theme->get('Version'), 'isActive' => ($slug === $current_theme)]; } } return $results; }
     private function _action_toggle_asset_status($payload) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; $id = sanitize_text_field($payload['assetIdentifier']); if ($payload['assetType'] === 'plugin') { if ((bool)$payload['newStatus']) activate_plugin($id); else deactivate_plugins($id); } elseif ((bool)$payload['newStatus']) { switch_theme($id); } return ['status' => 'ok']; }
     private function _action_delete_asset($payload) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; require_once ABSPATH . 'wp-admin/includes/file.php'; require_once ABSPATH . 'wp-admin/includes/theme.php'; $id = sanitize_text_field($payload['assetIdentifier']); if ($payload['assetType'] === 'plugin') $result = delete_plugins([$id]); else $result = delete_theme($id); if (is_wp_error($result)) throw new Exception($result->get_error_message()); return ['status' => 'deleted']; }
-    private function _action_get_asset_files($payload) { $id = sanitize_text_field($payload['assetIdentifier']); $type = $payload['assetType']; $base_path = ''; if ($id === 'root') $base_path = ABSPATH; elseif ($type === 'plugin') $base_path = WP_PLUGIN_DIR . '/' . dirname($id); elseif ($type === 'theme') $base_path = get_theme_root() . '/' . $id; if (empty($base_path) || !is_dir($base_path)) throw new Exception("Asset directory not found."); $base_path = realpath($base_path); if (strpos($base_path, realpath(WP_CONTENT_DIR)) !== 0 && strpos($base_path, realpath(ABSPATH)) !== 0) throw new Exception("Access denied."); $files = []; $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base_path, RecursiveDirectoryIterator::SKIP_DOTS)); foreach ($iterator as $file) { if ($file->isDir()) continue; $rel_path = str_replace(($id==='root'?realpath(ABSPATH):$base_path) . DIRECTORY_SEPARATOR, '', $file->getRealPath()); $files[] = ['name' => $rel_path]; } return $files; }
+    private function _action_get_asset_files($payload) { $id = sanitize_text_field($payload['assetIdentifier']); $type = $payload['assetType']; $base_path = ''; if ($id === 'root') $base_path = ABSPATH; elseif ($type === 'plugin') $base_path = WP_PLUGIN_DIR . '/' . dirname($id); elseif ($type === 'theme') $base_path = get_theme_root() . '/' . $id; if (empty($base_path) || !is_dir($base_path)) throw new Exception("Asset directory not found."); $base_path = realpath($base_path); if (strpos($base_path, realpath(WP_CONTENT_DIR)) !== 0 && strpos($base_path, realpath(ABSPATH)) !== 0) throw new Exception("Access denied."); $files = []; try { $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base_path, RecursiveDirectoryIterator::SKIP_DOTS | RecursiveDirectoryIterator::FOLLOW_SYMLINKS), RecursiveIteratorIterator::SELF_FIRST); $iterator->setMaxDepth(10); foreach ($iterator as $file) { if ($file->isDir()) continue; $rel_path = str_replace(($id === 'root' ? realpath(ABSPATH) : $base_path) . DIRECTORY_SEPARATOR, '', $file->getRealPath()); $files[] = ['name' => $rel_path]; } } catch (Exception $e) { throw new Exception('Could not iterate through files. Check directory permissions or for broken symlinks.'); } return $files; }
     private function _action_read_file_content($payload) { $file_path = $this->get_validated_path($payload); if (!is_readable($file_path)) throw new Exception("File not readable."); return ['content' => file_get_contents($file_path)]; }
     private function _action_write_file_content($payload) { $file_path = $this->get_validated_path($payload); $this->create_file_backup($file_path); if (file_put_contents($file_path, $payload['content']) === false) throw new Exception("Failed to write to file."); return ['status' => 'saved']; }
     private function _action_install_asset($payload) { require_once ABSPATH . 'wp-admin/includes/file.php'; $type = $payload['assetType']; $name = sanitize_file_name($payload['assetName']); $files = $payload['files']; $base_dir = ($type === 'plugin') ? WP_PLUGIN_DIR : get_theme_root(); $asset_dir = $base_dir . '/' . $name; if (!wp_mkdir_p($asset_dir)) throw new Exception("Could not create asset directory."); foreach ($files as $file) { $path_parts = explode('/', $file['name']); $file_name = sanitize_file_name(array_pop($path_parts)); $sub_dir = implode('/', $path_parts); $full_dir = $asset_dir . ($sub_dir ? '/' . $sub_dir : ''); if ($sub_dir && !wp_mkdir_p($full_dir)) throw new Exception("Could not create subdirectory: " . $sub_dir); if (file_put_contents($full_dir . '/' . $file_name, base64_decode($file['content'])) === false) throw new Exception("Failed to write file: " . $file_name); } return ['status' => 'installed']; }
     private function _action_get_db_tables($payload) { global $wpdb; return array_map(function($r){return $r[0];}, $wpdb->get_results("SHOW TABLES", ARRAY_N)); }
     private function _action_execute_safe_db_query($payload) { global $wpdb; $type = $payload['queryType']; $params = $payload['params']; $results = []; switch($type){ case 'get_options': foreach(array_map('sanitize_text_field',$params['optionNames']) as $n){$results[]=['option_name'=>$n,'option_value'=>get_option($n)];} break; case 'list_posts': $q=new WP_Query(['post_type'=>sanitize_text_field($params['postType']??'post'),'posts_per_page'=>(int)($params['limit']??10),'offset'=>(int)($params['offset']??0)]); foreach($q->posts as $p){$results[]=['ID'=>$p->ID,'post_title'=>$p->post_title,'post_status'=>$p->post_status,'post_date'=>$p->post_date];} break; default: throw new Exception("Unsupported safe query.");} return $results; }
+    // FIX: Added a new action to allow the AI to run any SELECT query, with a security check to prevent destructive queries.
+    private function _action_execute_arbitrary_db_query($payload) { global $wpdb; $query = $payload['query']; if (stripos(trim($query), 'select') !== 0) { throw new Exception('Only SELECT queries are allowed for security reasons.'); } return $wpdb->get_results($query, ARRAY_A); }
     private function _action_run_security_scan($payload) { global $wp_version; $results = []; $results[] = ['id' => 'debug_mode', 'title' => 'WP_DEBUG is Disabled', 'status' => defined('WP_DEBUG')&&WP_DEBUG?'fail':'pass', 'severity' => 'Medium', 'recommendation' => 'Set WP_DEBUG to false in wp-config.php on live sites.']; $results[] = ['id' => 'wp_version', 'title' => 'WordPress Version', 'status' => 'info', 'severity' => 'Info', 'recommendation' => 'Current version is '.$wp_version.'. Keep WordPress updated.']; $results[] = ['id' => 'default_admin', 'title' => 'Default "admin" User', 'status' => get_user_by('login','admin')?'fail':'pass', 'severity' => 'High', 'recommendation' => 'Delete the default "admin" user.']; return $results; }
     private function _action_get_debug_log($payload) { $log_path = WP_CONTENT_DIR . '/debug.log'; if (!is_readable($log_path)) throw new Exception("debug.log not found or not readable."); return ['content' => file_get_contents($log_path)]; }
     private function _action_create_site_backup($payload) { $dir=$this->get_backup_dir();$name='backup-'.date('Y-m-d_H-i-s').'.zip';$path=$dir.'/'.$name;$zip=new ZipArchive();if($zip->open($path,ZipArchive::CREATE)!==TRUE)throw new Exception("Cannot create zip.");$src=realpath(WP_CONTENT_DIR);$files=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($src,RecursiveDirectoryIterator::SKIP_DOTS),RecursiveIteratorIterator::LEAVES_ONLY);foreach($files as $n=>$f){if(!$f->isDir()){$fp=$f->getRealPath();$rp=substr($fp,strlen($src)+1);$zip->addFile($fp,$rp);}}$zip->close();return['status'=>'Backup created','fileName'=>$name,'content'=>base64_encode(file_get_contents($path))]; }
@@ -236,17 +205,7 @@ final class Dev_Console_Connector {
     private function _action_update_seo_data($payload) { if(isset($payload['site_title']))update_option('blogname',sanitize_text_field($payload['site_title'])); if(isset($payload['tagline']))update_option('blogdescription',sanitize_text_field($payload['tagline'])); if(isset($payload['is_public']))update_option('blog_public',$payload['is_public']?'1':'0'); return ['status' => 'ok']; }
 
     // --- START: Helper Methods ---
-    private function get_allowed_origin($origin) {
-        if (get_option(self::CORS_ALLOW_ALL_OPTION, '0') === '1') {
-            return '*';
-        }
-        $allowed_origins_raw = get_option(self::CORS_ALLOWED_ORIGINS_OPTION, '');
-        $allowed_origins = array_filter(array_map('trim', explode("\n", $allowed_origins_raw)));
-        if (in_array($origin, $allowed_origins)) {
-            return $origin;
-        }
-        return null;
-    }
+    private function get_allowed_origin($origin) { if (get_option(self::CORS_ALLOW_ALL_OPTION, '0') === '1') return '*'; $allowed_origins_raw = get_option(self::CORS_ALLOWED_ORIGINS_OPTION, ''); $allowed_origins = array_filter(array_map('trim', explode("\n", $allowed_origins_raw))); if (in_array($origin, $allowed_origins)) return $origin; return null; }
     private function get_validated_path($payload) { $id = sanitize_text_field($payload['assetIdentifier']); $type = $payload['assetType']; $rel_path = $payload['relativePath']; $base_path = ''; if ($id==='root') $base_path = ABSPATH; elseif ($type==='plugin') $base_path = WP_PLUGIN_DIR . '/' . dirname($id); elseif ($type==='theme') $base_path = get_theme_root() . '/' . $id; else throw new Exception("Invalid asset type."); $base_path=realpath($base_path); $safe_parts=[]; foreach(explode('/',$rel_path)as $part){if($part==='..')continue; $safe_parts[]=sanitize_file_name($part);} $safe_rel_path=implode('/',$safe_parts); $full_path=realpath($base_path.'/'.$safe_rel_path); if(!$full_path||strpos($full_path,$base_path)!==0)throw new Exception("Invalid file path."); return $full_path; }
     private function create_file_backup($file_path) { $dir=dirname($file_path).'/.dc_backups'; if(!is_dir($dir))wp_mkdir_p($dir); $backup_file=$dir.'/'.basename($file_path).'.'.time().'.bak'; if(!copy($file_path,$backup_file))error_log('Dev-Console: Failed backup for '.$file_path); }
     private function get_plugin_version() { if(!function_exists('get_plugin_data'))require_once(ABSPATH.'wp-admin/includes/plugin.php'); return get_plugin_data(__FILE__)['Version']; }

@@ -1,2 +1,44 @@
+#
+# Dev-Console @ dev.ponsrischool.in
+#
+# Description: An advanced local WordPress management system that uses AI to
+# generate, edit, and troubleshoot plugins and themes, and syncs changes
+# directly to a live WordPress site via a connector plugin.
+#
+# This file is for an open-source project. It allows all crawlers and AI agents
+# access to project source code but blocks sensitive configuration files
+# and backend directories to prevent information leakage.
+#
+
+# --- ALLOW ALL CRAWLERS AND AI AGENTS ---
 User-agent: *
-Allow: /
+# Disallow is left blank, which means all content is allowed by default.
+Disallow:
+
+# --- DISALLOW SENSITIVE FILES & DIRECTORIES ---
+# Block access to environment variables, config files, and core backend code
+# which could contain secrets (DB_PASS, JWT_SECRET, API keys).
+Disallow: /.env
+Disallow: /.env.local
+Disallow: /backend/
+Disallow: /db.ts
+Disallow: /types.ts
+
+# Block internal development/dependency directories
+Disallow: /node_modules/
+
+# Block common server and configuration files
+Disallow: /.htaccess
+Disallow: /tsconfig.json
+Disallow: /tsconfig.node.json
+Disallow: /vite.config.ts
+
+# Block common WordPress administrative files and directories
+# Although the project is a management system, these paths are often sensitive
+Disallow: /wp-admin/
+Disallow: /wp-content/
+Disallow: /wp-includes/
+
+# --- SITEMAP LOCATION (Recommended for good crawling) ---
+# Replace with the actual URL to your sitemap file.
+Sitemap: https://dev.ponsrischool.in/sitemap.xml

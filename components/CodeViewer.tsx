@@ -27,7 +27,7 @@ const CodeViewer: React.FC<CodeViewerProps> = ({ files, selectedFileName, onSele
                 </ul>
             </div>
             <div className="w-2/3 bg-background p-4 rounded-md border border-border-primary overflow-auto">
-                <pre className="text-sm font-mono whitespace-pre-wrap break-words">
+                <pre className="text-sm font-mono whitespace-pre">
                     <code>
                         {selectedFile?.content || 'Select a file to view its code.'}
                     </code>

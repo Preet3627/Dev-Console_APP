@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SiteData, ChatMessage } from '../types';
+import { SiteData, ChatMessage, Part, FunctionCallPart, FunctionResponsePart } from '../types';
 import { CloseIcon, SendIcon, CoPilotIcon, FullScreenIcon, ExitFullScreenIcon } from './icons/Icons';
 import { createChatSession } from '../services/aiService';
-import ThinkingAnimation from './ThinkingAnimation';
-import ActionConfirmationCard from './ActionConfirmationCard';
 import { executeTool } from '../services/toolExecutor';
+import ActionConfirmationModal from './ActionConfirmationModal';
 
 interface CoPilotProps {
     onClose: () => void;
@@ -22,8 +21,8 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
     const chatSessionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [pendingAction, setPendingAction] = useState<any | null>(null);
 
-    // New state for queuing prompts and auto-execution
     const [promptQueue, setPromptQueue] = useState<string[]>([]);
     const [autoExecute, setAutoExecute] = useState(false);
     const [showShortcutInfo, setShowShortcutInfo] = useState(false);
@@ -36,17 +35,13 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
 
     useEffect(scrollToBottom, [messages]);
     
-    // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
-            // Reset height to auto to allow shrinking
             textareaRef.current.style.height = 'auto';
-            // Set height to scrollHeight to expand
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
     }, [input]);
 
-    // Show shortcut info on first open
     useEffect(() => {
         const isDismissed = localStorage.getItem('dev-console-shortcut-info-dismissed');
         if (!isDismissed) {
@@ -54,11 +49,9 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
         }
     }, []);
 
-
-    // Keyboard shortcut for toggling auto-execute
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.shiftKey && e.key === 'Tab') {
+            if (e.ctrlKey && e.shiftKey && e.key === 'A') {
                 e.preventDefault();
                 setAutoExecute(prev => !prev);
             }
@@ -77,71 +70,47 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
             handleSend(initialPrompt);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialPrompt]);
+    }, []);
 
-    const handleSend = async (messageText?: string) => {
-        const textToSend = (messageText || input).trim();
-        if (!textToSend || isLoading) return;
-
-        const userMessage: ChatMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            parts: [{ text: textToSend }],
-        };
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
+    // FIX: Refactored chat logic into a stream processing function to handle the full function-calling loop correctly.
+    const processStream = async (streamPromise: Promise<any>) => {
         setIsLoading(true);
         setError(null);
 
+        let currentModelMessageId = Date.now().toString();
+        setMessages(prev => [...prev, { id: currentModelMessageId, role: 'model', parts: [{ text: '' }] }]);
+
         try {
-            const stream = await chatSessionRef.current.sendMessageStream({ message: textToSend });
-            let modelResponse = '';
-            let currentToolCalls: any[] = [];
-            
-            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', parts: [{ text: '' }], toolCalls: [] }]);
+            const stream = await streamPromise;
+            let modelResponseText = '';
+            let functionCalls: any[] = [];
 
             for await (const chunk of stream) {
                 const chunkText = chunk.text;
-                const functionCalls = chunk.functionCalls;
-
                 if (chunkText) {
-                    modelResponse += chunkText;
-                    setMessages(prev => {
-                        const newMessages = [...prev];
-                        newMessages[newMessages.length - 1].parts[0].text = modelResponse;
-                        return newMessages;
-                    });
+                    modelResponseText += chunkText;
+                    setMessages(prev => prev.map(msg => msg.id === currentModelMessageId ? { ...msg, parts: [{ text: modelResponseText }] } : msg));
                 }
-                if (functionCalls) {
-                    currentToolCalls = functionCalls;
-                    if (autoExecute && siteData) {
-                        for (const tc of currentToolCalls) {
-                            await handleConfirmAction(tc, true);
-                        }
-                    } else {
-                        setMessages(prev => {
-                            const newMessages = [...prev];
-                            newMessages[newMessages.length - 1].toolCalls = currentToolCalls;
-                            return newMessages;
-                        });
-                    }
+                if (chunk.functionCalls) {
+                    functionCalls.push(...chunk.functionCalls);
                 }
             }
+            
+            if (functionCalls.length > 0) {
+                if (autoExecute && siteData) {
+                    // In auto-execute mode, immediately execute and send back response
+                    const toolCall = functionCalls[0];
+                    await handleConfirmAction(toolCall, true);
+                } else {
+                    setPendingAction(functionCalls[0]);
+                }
+            }
+
         } catch (err) {
-            let errorMessage = (err as Error).message;
-            try {
-                const errorJson = JSON.parse(errorMessage);
-                if (errorJson.error && errorJson.error.message) {
-                    errorMessage = errorJson.error.message;
-                }
-            } catch (e) {
-                // Not a JSON string, use the original message
-            }
-            setError(`An error occurred: ${errorMessage}`);
+            setError(`An error occurred: ${(err as Error).message}`);
         } finally {
             setIsLoading(false);
-            // Check for and process the next prompt in the queue
-            if (promptQueue.length > 0) {
+             if (promptQueue.length > 0 && !pendingAction) {
                 const nextPrompt = promptQueue[0];
                 setPromptQueue(prev => prev.slice(1));
                 handleSend(nextPrompt);
@@ -149,50 +118,84 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
         }
     };
 
+    const handleSend = async (messageText?: string) => {
+        const textToSend = (messageText || input).trim();
+        if (!textToSend || isLoading) return;
+
+        setInput('');
+        
+        setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'user',
+            parts: [{ text: textToSend }],
+        }]);
+        
+        await processStream(chatSessionRef.current.sendMessageStream({ message: textToSend }));
+    };
+
     const handleConfirmAction = async (toolCall: any, isAutoExecuted = false) => {
-        if (!siteData) {
-            setError("Cannot execute action: Not connected to a WordPress site.");
+        const actionToExecute = toolCall || pendingAction;
+        if (!actionToExecute || !siteData) {
+            setError("Action could not be executed.");
             return;
         }
 
+        setPendingAction(null);
         setIsLoading(true);
-        try {
-            await executeTool(toolCall, siteData);
-            const messageText = isAutoExecuted 
-                ? `✅ Auto-Executed: \`${toolCall.name}\` ran successfully.`
-                : `✅ Action Confirmed: \`${toolCall.name}\` was executed successfully.`;
+        setError(null);
+        
+        const executingMessage = isAutoExecuted 
+            ? `Auto-executing \`${actionToExecute.name}\`...`
+            : `Executing \`${actionToExecute.name}\`...`;
+        
+        setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'model',
+            parts: [{ text: executingMessage }]
+        }]);
 
-            const systemMessage: ChatMessage = {
-                id: Date.now().toString(),
-                role: 'model',
-                parts: [{ text: messageText }],
+        try {
+            const result = await executeTool(actionToExecute, siteData);
+            
+             const functionResponsePart: FunctionResponsePart = {
+                functionResponse: {
+                    name: actionToExecute.name,
+                    response: {
+                        name: actionToExecute.name,
+                        content: result,
+                    }
+                }
             };
-            setMessages(prev => {
-                const updatedMessages = prev.map(msg => ({
-                    ...msg,
-                    toolCalls: msg.toolCalls?.filter(tc => tc.name !== toolCall.name)
-                }));
-                return [...updatedMessages, systemMessage];
-            });
+            
+            await processStream(chatSessionRef.current.sendMessageStream({ parts: [functionResponsePart] as Part[] }));
+
         } catch (err) {
-            setError(`Action failed: ${(err as Error).message}`);
-        } finally {
+            setError(`Action \`${actionToExecute.name}\` failed: ${(err as Error).message}`);
             setIsLoading(false);
         }
+    };
+    
+    const handleCancelAction = () => {
+        setPendingAction(null);
+        setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'model',
+            parts: [{ text: `Action cancelled by user.` }],
+        }]);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && e.ctrlKey) {
             e.preventDefault();
             if (input.trim()) {
-                if (isLoading) {
+                if (isLoading || pendingAction) {
                     setPromptQueue(prev => [...prev, input.trim()]);
                     setInput('');
                 } else {
                     handleSend();
                 }
             }
-        } else if (e.key === 'ArrowUp' && isLoading && input === '' && promptQueue.length > 0) {
+        } else if (e.key === 'ArrowUp' && (isLoading || pendingAction) && input === '' && promptQueue.length > 0) {
             e.preventDefault();
             const lastPrompt = promptQueue[promptQueue.length - 1];
             setPromptQueue(prev => prev.slice(0, -1));
@@ -201,6 +204,16 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
     };
     
     const modalStyle = modalBgColor ? { backgroundColor: modalBgColor } : {};
+
+    const renderPart = (part: Part, index: number) => {
+        if ('text' in part) {
+            return <div key={index} className="prose prose-sm prose-invert max-w-none prose-p:font-mono" dangerouslySetInnerHTML={{ __html: part.text.replace(/\n/g, '<br />') }}></div>;
+        }
+        if ('functionCall' in part) {
+            return <div key={index} className="text-accent-yellow font-mono text-xs">Waiting for confirmation to run: {part.functionCall.name}</div>;
+        }
+        return null;
+    };
 
     return (
         <div className={`fixed inset-0 bg-overlay backdrop-blur-sm flex items-center justify-center z-50 ${isFullScreen ? '' : 'p-4'}`} ref={componentRootRef} tabIndex={-1}>
@@ -217,27 +230,19 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                         <button onClick={onClose} className="text-text-secondary hover:text-text-primary p-1"><CloseIcon className="w-6 h-6" /></button>
                     </div>
                 </header>
-                <main className="flex-1 overflow-y-auto pr-2 space-y-4">
+                <main className="flex-1 overflow-y-auto pr-2 space-y-4 font-mono text-sm">
                     {messages.map((msg) => (
-                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`p-3 rounded-lg max-w-lg ${msg.role === 'user' ? 'bg-accent-blue text-white' : 'bg-background'}`}>
-                                <div className="prose prose-sm prose-invert max-w-none" dangerouslySetInnerHTML={{__html: msg.parts[0].text.replace(/\n/g, '<br />')}}></div>
-                                {msg.toolCalls && msg.toolCalls.map((tc, idx) => (
-                                    <ActionConfirmationCard 
-                                        key={idx}
-                                        functionCall={tc} 
-                                        onConfirm={() => handleConfirmAction(tc)} 
-                                        onCancel={() => setMessages(prev => prev.map(m => m.id === msg.id ? {...m, toolCalls: []} : m))}
-                                        disabled={!siteData}
-                                    />
-                                ))}
+                        <div key={msg.id} className="flex flex-col">
+                            <div className={`font-bold ${msg.role === 'user' ? 'text-accent-cyan' : 'text-accent-violet'}`}>
+                                {msg.role === 'user' ? 'User >' : 'Co-Pilot >'}
                             </div>
+                            {msg.parts.map(renderPart)}
                         </div>
                     ))}
-                    {isLoading && messages[messages.length - 1]?.role === 'user' && <ThinkingAnimation />}
+                    {isLoading && <div className="text-accent-yellow animate-pulse">Co-Pilot is thinking...</div>}
                     <div ref={messagesEndRef} />
                 </main>
-                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm text-accent-red/80">{error}</div>}
+                {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm font-mono">{error}</div>}
                 <footer className="mt-4 relative">
                      {showShortcutInfo && (
                         <div className="shortcut-popup-animation absolute bottom-full mb-2 w-full max-w-sm p-3 bg-background border border-border-primary rounded-lg shadow-lg">
@@ -255,7 +260,7 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                             </div>
                             <ul className="text-xs text-text-secondary space-y-1 font-mono">
                                 <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> - Send / Queue</li>
-                                <li><kbd>Shift</kbd>+<kbd>Tab</kbd> - Toggle Auto-Execute</li>
+                                <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> - Toggle Auto-Execute</li>
                                 <li><kbd>↑</kbd> (empty) - Edit last queued prompt</li>
                             </ul>
                         </div>
@@ -273,7 +278,7 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                      {autoExecute && (
                         <div className="absolute -top-6 left-0 flex items-center space-x-2">
                              <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-accent-purple/20 text-accent-purple">AUTO-EXEC ON</span>
-                             <span className="text-xs text-text-secondary">(Shift+Tab to toggle)</span>
+                             <span className="text-xs text-text-secondary">(Ctrl+Shift+A to toggle)</span>
                         </div>
                     )}
                     <div className={`flex items-center space-x-2 bg-background p-2 border border-border-primary rounded-lg transition-all ${autoExecute ? 'auto-execute-glow' : ''}`}>
@@ -284,13 +289,23 @@ const CoPilot: React.FC<CoPilotProps> = ({ onClose, siteData, initialPrompt, mod
                             onKeyDown={handleKeyDown}
                             placeholder={isLoading ? "AI is busy... Add to queue with Ctrl+Enter" : "Ask a question (Ctrl+Enter to send)"}
                             rows={1}
-                            className="flex-grow bg-background focus:outline-none resize-none copilot-textarea"
+                            className="flex-grow bg-background focus:outline-none resize-none copilot-textarea font-mono text-sm"
                         />
                         <button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="p-2 bg-accent-blue rounded-md disabled:opacity-50">
                             <SendIcon className="w-5 h-5" />
                         </button>
                     </div>
                 </footer>
+
+                 {pendingAction && (
+                    <ActionConfirmationModal
+                        functionCall={pendingAction}
+                        // FIX: Wrap handleConfirmAction in an arrow function to match the expected prop type '() => void'.
+                        onConfirm={() => handleConfirmAction(pendingAction)}
+                        onCancel={handleCancelAction}
+                        disabled={!siteData}
+                    />
+                )}
             </div>
         </div>
     );

@@ -3,6 +3,7 @@
 
 
 
+
 import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus, WordpressSeoData, AppSeoSettings } from '../types';
 import { getSecureItem, setSecureItem, removeSecureItem, encryptData, decryptData } from '../utils/secureLocalStorage';
 
@@ -306,6 +307,12 @@ export const getDbTables = async (siteData: SiteData): Promise<string[]> => {
 export const executeSafeDbQuery = async (siteData: SiteData, queryType: string, params: any): Promise<any[]> => {
     return connectorApiFetch(siteData, { action: 'execute_safe_db_query', payload: { queryType, params } });
 };
+
+// FIX: Added a new function to allow the AI to execute arbitrary (but validated) SELECT queries.
+export const executeArbitraryDbQuery = async (siteData: SiteData, query: string): Promise<any[]> => {
+    return connectorApiFetch(siteData, { action: 'execute_arbitrary_db_query', payload: { query } });
+};
+
 
 // --- Tools & Scanners ---
 export const runSecurityScan = async (siteData: SiteData): Promise<SecurityIssue[]> => {

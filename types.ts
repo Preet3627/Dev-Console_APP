@@ -74,12 +74,26 @@ export interface BackupFile {
     timestamp: string;
 }
 
+// FIX: Redefined chat message types to properly support the full Gemini function calling loop, including text, function calls, and function responses. This is critical for showing tool output in the chat.
+export interface TextPart { text: string; }
+export interface FunctionCallPart { functionCall: any; }
+export interface FunctionResponsePart {
+  functionResponse: {
+    name: string;
+    response: {
+        name: string;
+        content: any;
+    };
+  };
+}
+export type Part = TextPart | FunctionCallPart | FunctionResponsePart;
+
 export interface ChatMessage {
     id: string;
     role: 'user' | 'model';
-    parts: [{ text: string }];
-    toolCalls?: any[];
+    parts: Part[];
 }
+
 
 // ADD: Interface for a saved chat session.
 export interface ChatSession {
