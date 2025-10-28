@@ -1,18 +1,19 @@
 
 import React, { useState } from 'react';
-import { PM_SHRI_Logo, GoogleIcon } from './icons/Icons';
+import { PM_SHRI_Logo, GoogleIcon, HomeIcon } from './icons/Icons';
 import { loginUser, signInWithGoogle } from '../services/wordpressService';
 import { triggerSignIn } from '../services/googleAuthService';
 import { AppSettings, SiteData } from '../types';
 
 interface LoginProps {
-    onLogin: (userData: { email: string; token: string; isAdmin: boolean; settings: AppSettings, sites: SiteData[], displayName?: string, profilePictureUrl?: string | null }) => void;
+    onLogin: (userData: { email: string; token: string; isAdmin: boolean; settings: AppSettings, sites: SiteData[], displayName?: string, profilePictureUrl?: string | null, isNewUser?: boolean }) => void;
     onNavigateToSignUp: () => void;
     onNavigateToForgotPassword: () => void;
     onNavigateToVerification: (email: string) => void;
+    onGoToLanding: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToSignUp, onNavigateToForgotPassword, onNavigateToVerification }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToSignUp, onNavigateToForgotPassword, onNavigateToVerification, onGoToLanding }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -55,6 +56,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToSignUp, onNavigateTo
 
     return (
         <div className="flex items-center justify-center h-screen login-gradient-bg">
+            <button onClick={onGoToLanding} className="absolute top-4 left-4 btn btn-secondary flex items-center space-x-2">
+                <HomeIcon className="w-4 h-4" />
+                <span>Back to Homepage</span>
+            </button>
             <div className="w-full max-w-md p-8 space-y-6 glass-card">
                 <div className="text-center">
                     <PM_SHRI_Logo className="w-24 h-24 mx-auto mb-4" />

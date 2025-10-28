@@ -48,8 +48,12 @@ const FileManager: React.FC<FileManagerProps> = ({ siteData, onEditFile }) => {
             <h1 className="text-4xl font-bold mb-8">Root File Manager</h1>
             <div className="bg-background-secondary border border-border-primary rounded-lg">
                 <ul className="divide-y divide-border-primary max-h-[70vh] overflow-y-auto">
-                    {files.map(file => (
-                        <li key={file.name} className="p-3 flex items-center justify-between hover:bg-background">
+                    {files.map((file, index) => (
+                        <li 
+                            key={file.name} 
+                            className="p-3 flex items-center justify-between hover:bg-background animate-staggered-list-item"
+                            style={{ animationDelay: `${index * 20}ms` }}
+                        >
                             <div className="flex items-center truncate">
                                 {getFileIcon(file.name)}
                                 <span className="font-mono text-sm truncate">{file.name}</span>

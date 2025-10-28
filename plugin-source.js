@@ -458,7 +458,7 @@ final class Dev_Console_Connector {
             'id' => 'wp_version',
             'title' => 'WordPress Version is Up-to-date',
             'description' => 'Checks if the current WordPress version is the latest.',
-            'status' => 'info', // Can\'t check for latest version from here
+            'status' => 'info', // Can\\'t check for latest version from here
             'severity' => 'Info',
             'recommendation' => 'Current version is ' . $wp_version . '. Always keep WordPress updated.'
         ];
@@ -546,6 +546,29 @@ final class Dev_Console_Connector {
             throw new Exception("Failed to write new plugin content.");
         }
         return ['status' => 'Connector plugin updated. Please reactivate if necessary.'];
+    }
+
+    // FIX: Add actions for getting and updating WordPress SEO settings.
+    private function _action_get_seo_data($payload) {
+        return [
+            'site_title' => get_option('blogname', ''),
+            'tagline' => get_option('blogdescription', ''),
+            'is_public' => (bool) get_option('blog_public', '1'),
+        ];
+    }
+
+    private function _action_update_seo_data($payload) {
+        if (isset($payload['site_title'])) {
+            update_option('blogname', sanitize_text_field($payload['site_title']));
+        }
+        if (isset($payload['tagline'])) {
+            update_option('blogdescription', sanitize_text_field($payload['tagline']));
+        }
+        if (isset($payload['is_public'])) {
+            update_option('blog_public', $payload['is_public'] ? '1' : '0');
+        }
+        
+        return ['status' => 'ok'];
     }
 
     // --- START: Helper Methods ---

@@ -66,6 +66,14 @@ export const CoPilotIcon: React.FC<SvgIconProps> = (props) => (
     </svg>
 );
 
+// ADD: New icon for SEO Manager.
+export const SeoIcon: React.FC<SvgIconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.25 8.25 0 0112 21 8.25 8.25 0 01 8.638 5.214M15.362 5.214A3.375 3.375 0 0112 3.75a3.375 3.375 0 01-3.362 1.464m6.724 0a3.375 3.375 0 00-3.362-1.464v0a3.375 3.375 0 00-3.362 1.464m6.724 0L12 10.5" />
+    </svg>
+);
+
+
 export const SettingsIcon: React.FC<SvgIconProps> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-1.002 1.11-1.223a11.953 11.953 0 012.086 0c.55.221 1.02.682 1.11 1.223.09.542.09 1.096 0 1.638-.09.542-.56 1.002-1.11 1.223a11.953 11.953 0 01-2.086 0c-.55-.221-1.02-.682-1.11-1.223-.09-.542-.09-1.096 0-1.638zM10.343 18.06c.09-.542.56-1.002 1.11-1.223a11.953 11.953 0 012.086 0c.55.221 1.02.682 1.11 1.223.09.542.09 1.096 0 1.638-.09.542-.56 1.002-1.11 1.223a11.953 11.953 0 01-2.086 0c-.55-.221-1.02-.682-1.11-1.223-.09-.542-.09-1.096 0-1.638zM10.343 11a1.5 1.5 0 012.086 0c.55.221 1.02.682 1.11 1.223.09.542.09 1.096 0 1.638-.09.542-.56 1.002-1.11 1.223a11.953 11.953 0 01-2.086 0c-.55-.221-1.02-.682-1.11-1.223-.09-.542-.09-1.096 0-1.638z" />

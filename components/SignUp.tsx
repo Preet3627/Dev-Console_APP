@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { PM_SHRI_Logo, GoogleIcon } from './icons/Icons';
+import { PM_SHRI_Logo, GoogleIcon, HomeIcon } from './icons/Icons';
 import { registerUser, signInWithGoogle } from '../services/wordpressService';
 import { triggerSignIn } from '../services/googleAuthService';
 import { AppSettings, SiteData } from '../types';
@@ -8,10 +8,11 @@ import { AppSettings, SiteData } from '../types';
 interface SignUpProps {
     onBackToLogin: () => void;
     onNavigateToVerification: (email: string) => void;
-    onLogin: (userData: { email: string; token: string; isAdmin: boolean; settings: AppSettings, sites: SiteData[], displayName?: string, profilePictureUrl?: string | null }) => void;
+    onLogin: (userData: { email: string; token: string; isAdmin: boolean; settings: AppSettings, sites: SiteData[], displayName?: string, profilePictureUrl?: string | null, isNewUser?: boolean }) => void;
+    onGoToLanding: () => void;
 }
 
-const SignUp: React.FC<SignUpProps> = ({ onBackToLogin, onNavigateToVerification, onLogin }) => {
+const SignUp: React.FC<SignUpProps> = ({ onBackToLogin, onNavigateToVerification, onLogin, onGoToLanding }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -63,6 +64,10 @@ const SignUp: React.FC<SignUpProps> = ({ onBackToLogin, onNavigateToVerification
 
     return (
         <div className="flex items-center justify-center h-screen login-gradient-bg">
+            <button onClick={onGoToLanding} className="absolute top-4 left-4 btn btn-secondary flex items-center space-x-2">
+                <HomeIcon className="w-4 h-4" />
+                <span>Back to Homepage</span>
+            </button>
             <div className="w-full max-w-md p-8 space-y-8 glass-card">
                 <div className="text-center">
                     <PM_SHRI_Logo className="w-24 h-24 mx-auto mb-4" />

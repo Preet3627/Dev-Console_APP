@@ -78,7 +78,11 @@ const PluginLogViewer: React.FC<PluginLogViewerProps> = ({ siteData }) => {
             <div className="bg-background-secondary border border-border-primary rounded-lg overflow-hidden">
                 <ul className="divide-y divide-border-primary">
                     {parsedLogs.map((log, index) => (
-                         <li key={index} className="p-4 hover:bg-background transition-colors">
+                         <li 
+                            key={index} 
+                            className="p-4 hover:bg-background transition-colors animate-staggered-list-item"
+                            style={{ animationDelay: `${index * 50}ms` }}
+                        >
                             <div className="flex justify-between items-start">
                                 <div className="flex-grow">
                                     <p className="text-xs text-text-secondary mb-1">{new Date(log.timestamp).toLocaleString()}</p>

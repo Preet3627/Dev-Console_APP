@@ -1,5 +1,7 @@
 
 
+
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -172,6 +174,16 @@ const createTables = async (connection) => {
             name VARCHAR(255) NOT NULL,
             site_data_encrypted TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    `);
+
+    // FIX: Add a table to store the application's own SEO settings for public-facing deployments.
+    await connection.query(`
+        CREATE TABLE IF NOT EXISTS app_seo_settings (
+            id INT PRIMARY KEY DEFAULT 1,
+            meta_title VARCHAR(255) DEFAULT '',
+            meta_description TEXT,
+            meta_keywords TEXT
         );
     `);
 
@@ -647,6 +659,48 @@ apiV1Router.post('/profile', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Profile update error:', error);
         res.status(500).json({ message: 'Failed to update profile.' });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
+
+// FIX: Add admin-only routes to get and save application-wide SEO settings.
+apiV1Router.get('/app-seo', authenticateToken, isAdmin, async (req, res) => {
+    if (!isDbConfigured) return res.json({ meta_title: '', meta_description: '', meta_keywords: '' });
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        const [rows] = await connection.query('SELECT meta_title, meta_description, meta_keywords FROM app_seo_settings WHERE id = 1');
+        if (rows.length > 0) {
+            res.json(rows[0]);
+        } else {
+            // If no row exists, create one with defaults and return that.
+            const defaultSeo = { meta_title: 'Dev-Console', meta_description: 'AI-powered WordPress management suite.', meta_keywords: 'wordpress, ai, developer, management' };
+            await connection.query('INSERT INTO app_seo_settings (id, meta_title, meta_description, meta_keywords) VALUES (1, ?, ?, ?)', [defaultSeo.meta_title, defaultSeo.meta_description, defaultSeo.meta_keywords]);
+            res.json(defaultSeo);
+        }
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to fetch app SEO settings.' });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
+
+apiV1Router.post('/app-seo', authenticateToken, isAdmin, async (req, res) => {
+    if (!isDbConfigured) return res.sendStatus(204);
+    const { meta_title, meta_description, meta_keywords } = req.body;
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        await connection.query(
+            `INSERT INTO app_seo_settings (id, meta_title, meta_description, meta_keywords) 
+             VALUES (1, ?, ?, ?) 
+             ON DUPLICATE KEY UPDATE meta_title = VALUES(meta_title), meta_description = VALUES(meta_description), meta_keywords = VALUES(meta_keywords)`,
+            [meta_title, meta_description, meta_keywords]
+        );
+        res.sendStatus(204);
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to save app SEO settings.' });
     } finally {
         if (connection) await connection.end();
     }

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { requestPasswordReset } from '../services/wordpressService';
+import { HomeIcon } from './icons/Icons';
 
 interface ForgotPasswordProps {
     onBackToLogin: () => void;
+    onGoToLanding: () => void;
 }
 
-const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
+const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin, onGoToLanding }) => {
     const [email, setEmail] = useState('');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
@@ -30,6 +32,10 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
 
     return (
         <div className="flex items-center justify-center h-screen login-gradient-bg">
+            <button onClick={onGoToLanding} className="absolute top-4 left-4 btn btn-secondary flex items-center space-x-2">
+                <HomeIcon className="w-4 h-4" />
+                <span>Back to Homepage</span>
+            </button>
             <div className="w-full max-w-md p-8 space-y-8 glass-card">
                 <div className="text-center">
                     <h1 className="text-3xl font-bold text-text-primary">Reset Password</h1>

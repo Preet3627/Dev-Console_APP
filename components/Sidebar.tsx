@@ -3,7 +3,7 @@ import { View } from '../App';
 import { 
     HomeIcon, PluginIcon, ThemeIcon, DatabaseIcon, GenerateIcon, 
     ShieldIcon, SpeedIcon, FileIcon, SettingsIcon, LogoutIcon, CoPilotIcon,
-    BackupIcon, PM_SHRI_Logo, ServerIcon
+    BackupIcon, PM_SHRI_Logo, ServerIcon, SeoIcon
 } from './icons/Icons';
 
 interface SidebarProps {
@@ -25,10 +25,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout, isAdm
         { view: 'generator', label: 'AI Generator', icon: GenerateIcon },
         { view: 'scanner', label: 'Security Scanner', icon: ShieldIcon },
         { view: 'optimizer', label: 'Optimizer', icon: SpeedIcon },
+        // ADD: New SEO Manager link.
+        { view: 'seo', label: 'SEO Manager', icon: SeoIcon },
         { view: 'logs', label: 'Debug Logs', icon: FileIcon },
         { view: 'backupRestore', label: 'Backup/Restore', icon: BackupIcon },
         { view: 'backendStatus', label: 'Backend Status', icon: ServerIcon, adminOnly: true },
-        { view: 'adminPanel', label: 'Admin Panel', icon: ShieldIcon, adminOnly: true },
+        // CHANGE: Modified Admin Panel link and added a new one for App SEO.
+        { view: 'adminPanel', label: 'User Management', icon: ShieldIcon, adminOnly: true },
+        { view: 'appSeo', label: 'Application SEO', icon: SeoIcon, adminOnly: true },
     ];
 
     const NavLink: React.FC<{ view: View; label: string; icon: React.FC<any> }> = ({ view, label, icon: Icon }) => {

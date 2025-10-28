@@ -1,5 +1,7 @@
 
-import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus } from '../types';
+
+
+import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus, WordpressSeoData, AppSeoSettings } from '../types';
 import { getSecureItem, setSecureItem, removeSecureItem, encryptData, decryptData } from '../utils/secureLocalStorage';
 
 const MASTER_API_BASE_URL = '/dev-console-api/v1';
@@ -205,6 +207,28 @@ export const updateAndEncryptSiteData = async (siteData: SiteData): Promise<void
     await masterApiFetch('/site-data', {
         method: 'POST',
         body: JSON.stringify({ data: encryptedData }),
+    });
+};
+
+// FIX: Add new functions for WordPress site SEO and application SEO to resolve module export errors.
+// --- SEO Management (WordPress Site) ---
+export const getWordpressSeoData = async (siteData: SiteData): Promise<WordpressSeoData> => {
+    return connectorApiFetch(siteData, { action: 'get_seo_data' });
+};
+
+export const updateWordpressSeoData = async (siteData: SiteData, seoData: WordpressSeoData): Promise<{ status: string }> => {
+    return connectorApiFetch(siteData, { action: 'update_seo_data', payload: seoData });
+};
+
+// --- SEO Management (Dev-Console App) ---
+export const getAppSeoSettings = async (): Promise<AppSeoSettings> => {
+    return masterApiFetch('/app-seo');
+};
+
+export const saveAppSeoSettings = async (settings: AppSeoSettings): Promise<void> => {
+    await masterApiFetch('/app-seo', {
+        method: 'POST',
+        body: JSON.stringify(settings),
     });
 };
 

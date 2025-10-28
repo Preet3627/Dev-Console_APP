@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { verifyUser, resendVerificationCode } from '../services/wordpressService';
+import { HomeIcon } from './icons/Icons';
 
 interface VerificationProps {
     email: string;
     onVerificationSuccess: () => void;
     onBackToLogin: () => void;
+    onGoToLanding: () => void;
 }
 
-const Verification: React.FC<VerificationProps> = ({ email, onVerificationSuccess, onBackToLogin }) => {
+const Verification: React.FC<VerificationProps> = ({ email, onVerificationSuccess, onBackToLogin, onGoToLanding }) => {
     const [code, setCode] = useState<string[]>(Array(6).fill(''));
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -89,6 +91,10 @@ const Verification: React.FC<VerificationProps> = ({ email, onVerificationSucces
 
     return (
         <div className="flex items-center justify-center h-screen login-gradient-bg">
+            <button onClick={onGoToLanding} className="absolute top-4 left-4 btn btn-secondary flex items-center space-x-2">
+                <HomeIcon className="w-4 h-4" />
+                <span>Back to Homepage</span>
+            </button>
             <div className="w-full max-w-md p-8 space-y-8 glass-card">
                 <div className="text-center">
                     <h1 className="text-3xl font-bold text-text-primary">Check your email</h1>

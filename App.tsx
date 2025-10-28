@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -27,13 +28,18 @@ import DatabaseSetup from './components/DatabaseSetup';
 import BackendStatusView from './components/BackendStatusView';
 import LandingPage from './LandingPage';
 import SiteSwitcherModal from './components/SiteSwitcherModal';
+// ADD: Import the new WelcomeWizard and SeoManager components.
+import WelcomeWizard from './components/WelcomeWizard';
+import SeoManager from './components/SeoManager';
+
 
 import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';
 import { getAllSites, testConnection, getBackendStatus, getPublicConfig, getLatestConnectorPlugin, updateConnectorPlugin } from './services/wordpressService';
 import { SiteData, AppSettings, Asset, AssetFile, AssetType } from './types';
 import FloatingCoPilotButton from './components/FloatingCoPilotButton';
 
-export type View = 'dashboard' | 'plugins' | 'themes' | 'database' | 'generator' | 'scanner' | 'optimizer' | 'logs' | 'settings' | 'copilot' | 'fileManager' | 'backupRestore' | 'adminPanel' | 'backendStatus';
+// ADD: Added 'seo' and 'appSeo' to the View type for the new SEO features.
+export type View = 'dashboard' | 'plugins' | 'themes' | 'database' | 'generator' | 'scanner' | 'optimizer' | 'logs' | 'settings' | 'copilot' | 'fileManager' | 'backupRestore' | 'adminPanel' | 'backendStatus' | 'seo' | 'appSeo';
 type AuthView = 'login' | 'signup' | 'verify' | 'forgot_password';
 type Toast = { message: string; type: 'success' | 'error' };
 export type AppStatus = 'loading' | 'needs_setup' | 'setup_error' | 'ready';
@@ -73,6 +79,10 @@ const App: React.FC = () => {
     const [isCheckingVersions, setIsCheckingVersions] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateStatus, setUpdateStatus] = useState('');
+    
+    // ADD: State for the new Welcome Wizard.
+    const [showWelcomeWizard, setShowWelcomeWizard] = useState(false);
+
 
     const checkBackendStatus = useCallback(async () => {
         setAppStatus('loading');
@@ -130,8 +140,36 @@ const App: React.FC = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // ADD: Browser history management to handle back/forward buttons.
+    const navigate = useCallback((view: View, replace = false) => {
+        setCurrentView(view);
+        const method = replace ? 'replaceState' : 'pushState';
+        window.history[method]({ view }, '', `#${view}`);
+    }, []);
 
-    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, sites?: SiteData[], displayName?: string, profilePictureUrl?: string | null }) => {
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            const view = event.state?.view || 'dashboard';
+            setCurrentView(view);
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    useEffect(() => {
+        // Set initial view from URL hash on load
+        const initialView = window.location.hash.replace('#', '') as View;
+        if (Object.values(['dashboard', 'plugins', 'themes', 'database', 'generator', 'scanner', 'optimizer', 'logs', 'settings', 'copilot', 'fileManager', 'backupRestore', 'adminPanel', 'backendStatus', 'seo', 'appSeo']).includes(initialView)) {
+             navigate(initialView, true);
+        } else {
+             navigate('dashboard', true);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+
+    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, sites?: SiteData[], displayName?: string, profilePictureUrl?: string | null, isNewUser?: boolean }) => {
         setSecureItem('authToken', data.token);
         setSecureItem('userEmail', data.email);
         setSecureItem('isAdmin', data.isAdmin);
@@ -155,6 +193,12 @@ const App: React.FC = () => {
         } else {
             setCurrentSite(null);
         }
+        
+        // ADD: Trigger the welcome wizard for new users.
+        const hasSeenWizard = getSecureItem<boolean>('hasSeenWelcomeWizard');
+        if (data.isNewUser && !hasSeenWizard) {
+            setShowWelcomeWizard(true);
+        }
     };
 
     const handleLogout = () => {
@@ -171,7 +215,7 @@ const App: React.FC = () => {
         setCurrentSite(null);
         setDisplayName('');
         setProfilePictureUrl(null);
-        setCurrentView('dashboard');
+        navigate('dashboard');
         setAuthView('login');
         setCurrentAppView('landing');
     };
@@ -335,9 +379,18 @@ const App: React.FC = () => {
         setCurrentAppView('main_app');
     };
     
+    const handleGoToLanding = () => {
+        setCurrentAppView('landing');
+    };
+    
     const handleProfileUpdate = () => {
         setDisplayName(getSecureItem('displayName') || '');
         setProfilePictureUrl(getSecureItem('profilePictureUrl'));
+    };
+    
+    const handleCloseWizard = () => {
+        setShowWelcomeWizard(false);
+        setSecureItem('hasSeenWelcomeWizard', true);
     };
     
     const needsUpdate = !!(connectorVersion && latestConnectorVersion && connectorVersion !== 'Unknown' && latestConnectorVersion !== 'Unknown' && connectorVersion < latestConnectorVersion);
@@ -347,7 +400,8 @@ const App: React.FC = () => {
     }
 
     const renderView = () => {
-        if (!currentSite && !['dashboard', 'settings', 'generator', 'adminPanel', 'backendStatus'].includes(currentView)) {
+        // ADD: Added 'seo' and 'appSeo' to the list of views accessible without a site connection.
+        if (!currentSite && !['dashboard', 'settings', 'generator', 'adminPanel', 'backendStatus', 'appSeo', 'copilot'].includes(currentView)) {
              return (
                 <div className="text-center p-8">
                     <h2 className="text-2xl font-semibold mb-4">Site Not Connected</h2>
@@ -380,8 +434,15 @@ const App: React.FC = () => {
                 return <BackupRestore siteData={currentSite!} />;
             case 'copilot':
                 return <CoPilotView siteData={currentSite} />;
+            // ADD: Case for the new SeoManager view.
+            case 'seo':
+                return <SeoManager siteData={currentSite!} />;
             case 'adminPanel':
-                return <AdminPanel />;
+                // ADD: Pass navigate function to AdminPanel to handle sub-views like appSeo.
+                return <AdminPanel navigate={navigate} />;
+            case 'appSeo':
+                // This view is handled within AdminPanel, but adding a direct route for history.
+                return <AdminPanel navigate={navigate} initialTab="appSeo" />;
             case 'backendStatus':
                 return <BackendStatusView />;
             case 'settings':
@@ -406,20 +467,20 @@ const App: React.FC = () => {
     if (!isLoggedIn) {
         switch (authView) {
             case 'signup':
-                return <SignUp onBackToLogin={() => setAuthView('login')} onNavigateToVerification={handleNavigateToVerification} onLogin={handleLogin} />;
+                return <SignUp onBackToLogin={() => setAuthView('login')} onNavigateToVerification={handleNavigateToVerification} onLogin={handleLogin} onGoToLanding={handleGoToLanding} />;
             case 'verify':
-                return <Verification email={verificationEmail} onVerificationSuccess={() => setAuthView('login')} onBackToLogin={() => setAuthView('login')} />;
+                return <Verification email={verificationEmail} onVerificationSuccess={() => setAuthView('login')} onBackToLogin={() => setAuthView('login')} onGoToLanding={handleGoToLanding} />;
             case 'forgot_password':
-                return <ForgotPassword onBackToLogin={() => setAuthView('login')} />;
+                return <ForgotPassword onBackToLogin={() => setAuthView('login')} onGoToLanding={handleGoToLanding} />;
             case 'login':
             default:
-                return <Login onLogin={handleLogin} onNavigateToSignUp={() => setAuthView('signup')} onNavigateToForgotPassword={() => setAuthView('forgot_password')} onNavigateToVerification={handleNavigateToVerification} />;
+                return <Login onLogin={handleLogin} onNavigateToSignUp={() => setAuthView('signup')} onNavigateToForgotPassword={() => setAuthView('forgot_password')} onNavigateToVerification={handleNavigateToVerification} onGoToLanding={handleGoToLanding} />;
         }
     }
     
     return (
         <div className="flex h-screen bg-background text-text-primary font-sans main-app-fade-in">
-            <Sidebar currentView={currentView} setView={setCurrentView} onLogout={handleLogout} isAdmin={isAdmin} />
+            <Sidebar currentView={currentView} setView={navigate} onLogout={handleLogout} isAdmin={isAdmin} />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <Header 
                     sites={sites}
@@ -430,10 +491,12 @@ const App: React.FC = () => {
                     displayName={displayName}
                     profilePictureUrl={profilePictureUrl}
                     onLogout={handleLogout}
-                    setView={setCurrentView}
+                    setView={navigate}
                 />
                 <main className="flex-1 overflow-y-auto p-8">
-                    {renderView()}
+                    <div key={currentView} className="animate-fade-in-up-view">
+                        {renderView()}
+                    </div>
                 </main>
             </div>
             
@@ -444,6 +507,8 @@ const App: React.FC = () => {
                     {toast.message}
                 </div>
             )}
+            
+            {showWelcomeWizard && <WelcomeWizard onClose={handleCloseWizard} onConnectSite={() => setShowConnectorModal(true)} />}
 
             {showSiteSwitcher && (
                  <SiteSwitcherModal

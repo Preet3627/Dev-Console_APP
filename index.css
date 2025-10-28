@@ -106,7 +106,13 @@ body {
     border: 1px solid #374151;
     border-radius: 12px;
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
 }
+.glass-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+}
+
 
 .btn {
     padding: 10px 20px;
@@ -240,6 +246,38 @@ kbd {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* ADD: New keyframes for satisfying animations */
+@keyframes satisfying-scale-in-up {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes fade-in-up-view {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes staggered-list-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 
 /* ADD: Class for shortcut popup */
 .shortcut-popup-animation {
@@ -258,7 +296,15 @@ kbd {
 .animate-spin { animation: spin 1s linear infinite; }
 .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 .main-app-fade-in { animation: fade-in 0.5s ease-out; }
-.modal-content-animation { animation: scale-in 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
+/* CHANGE: Updated modal animation to be more satisfying */
+.modal-content-animation { animation: satisfying-scale-in-up 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+/* ADD: New animation classes */
+.animate-fade-in-up-view { animation: fade-in-up-view 0.5s cubic-bezier(0.25, 1, 0.5, 1); }
+.animate-staggered-list-item {
+    opacity: 0;
+    animation: staggered-list-fade-in 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
 
 /* Display, Layout, Sizing */
 .flex { display: flex; }

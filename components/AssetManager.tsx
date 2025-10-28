@@ -77,8 +77,12 @@ const AssetManager: React.FC<AssetManagerProps> = ({ siteData, assetType, onEdit
         return (
             <div className="bg-background-secondary border border-border-primary rounded-lg overflow-hidden">
                 <ul className="divide-y divide-border-primary">
-                    {assets.map(asset => (
-                        <li key={asset.identifier} className="p-4 flex items-center justify-between hover:bg-background transition-colors">
+                    {assets.map((asset, index) => (
+                        <li 
+                            key={asset.identifier} 
+                            className="p-4 flex items-center justify-between hover:bg-background transition-colors animate-staggered-list-item"
+                            style={{ animationDelay: `${index * 50}ms` }}
+                        >
                             <div className="flex items-center">
                                 <AssetIcon className="w-8 h-8 mr-4 text-text-secondary" />
                                 <div>

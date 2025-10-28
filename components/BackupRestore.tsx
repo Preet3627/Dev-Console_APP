@@ -104,8 +104,12 @@ const BackupRestore: React.FC<{ siteData: SiteData }> = ({ siteData }) => {
         return (
             <div className="bg-background-secondary border border-border-primary rounded-lg overflow-hidden">
                 <ul className="divide-y divide-border-primary">
-                    {backups.map(backup => (
-                        <li key={backup.name} className="p-4 flex items-center justify-between hover:bg-background transition-colors">
+                    {backups.map((backup, index) => (
+                        <li 
+                            key={backup.name} 
+                            className="p-4 flex items-center justify-between hover:bg-background transition-colors animate-staggered-list-item"
+                            style={{ animationDelay: `${index * 50}ms` }}
+                        >
                             <div>
                                 <p className="font-mono text-text-primary">{backup.name}</p>
                                 <p className="text-sm text-text-secondary">

@@ -82,6 +82,29 @@ export interface ChatMessage {
     toolCalls?: any[];
 }
 
+// ADD: Interface for a saved chat session.
+export interface ChatSession {
+    id: number;
+    title: string;
+    created_at: string;
+    messages: ChatMessage[];
+}
+
+// ADD: Interface for WordPress SEO data.
+export interface WordpressSeoData {
+    site_title: string;
+    tagline: string;
+    is_public: boolean;
+}
+
+// ADD: Interface for the Dev-Console's own SEO settings for admins.
+export interface AppSeoSettings {
+    meta_title: string;
+    meta_description: string;
+    meta_keywords: string;
+}
+
+
 export interface SecurityIssue {
     id: string;
     title: string;
