@@ -1,33 +1,31 @@
 export const pluginSourceCode = `<?php
 /**
  * Plugin Name: Dev-Console Connector
- * Description: Securely connects your WordPress site to the Dev-Console Co-Pilot application.
- * Version: 2.8.0
+ * Description: Securely connects your WordPress site to the Dev-Console application, enabling AI-powered management and development.
+ * Version: 4.0.0
  * Author: PM-SHRI
  * Author URI: https://ponsrischool.in
  */
 
 if (!defined('ABSPATH')) {
-    exit;
+    exit; // Exit if accessed directly.
 }
 
 // Prevent fatal error if class is already defined
 if (class_exists('Dev_Console_Connector')) {
-    return;
+    // Check if it's a request to update the plugin file itself
+    if (isset($_POST['action']) && $_POST['action'] === 'update_plugin_file' && isset($_POST['payload']['plugin_type']) && $_POST['payload']['plugin_type'] === 'connector') {
+        // Allow the update to proceed
+    } else {
+        return;
+    }
 }
-
-if (!defined('DC_CONNECTOR_KEY_OPTION')) { define('DC_CONNECTOR_KEY_OPTION', 'dc_connector_key'); }
-if (!defined('DC_API_KEY_OPTION')) { define('DC_API_KEY_OPTION', 'dc_api_key'); }
-if (!defined('DC_CORS_SETTINGS_OPTION')) { define('DC_CORS_SETTINGS_OPTION', 'dc_connector_cors_settings'); }
-if (!defined('DC_BACKUP_DIR_FILES')) { define('DC_BACKUP_DIR_FILES', 'dev-console-backups/file-history'); }
-if (!defined('DC_BACKUP_DIR_SITE')) { define('DC_BACKUP_DIR_SITE', 'dev-console-backups/site-backups'); }
-
-// Custom exception for controlled, user-facing error messages.
-class DC_Connector_Exception extends Exception {}
 
 final class Dev_Console_Connector {
 
     private static $instance;
+    const CONNECTOR_KEY_OPTION = 'dev_console_connector_key';
+    const API_KEY_OPTION = 'dev_console_api_key';
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -36,654 +34,605 @@ final class Dev_Console_Connector {
         return self::$instance;
     }
 
-    /**
-     * Constructor. Registers all necessary hooks.
-     */
     private function __construct() {
-        // FIX: Moved from 'init' to 'admin_init' to ensure admin files are loaded before options are created.
-        add_action('admin_init', [$this, 'check_and_create_options']);
-        add_action('rest_api_init', [$this, 'register_routes']);
+        // On plugin activation, generate keys
+        register_activation_hook(__FILE__, [$this, 'activate']);
+
         add_action('admin_menu', [$this, 'add_admin_menu']);
-        add_filter('rest_pre_serve_request', [$this, 'handle_cors_headers'], 10, 4);
+        add_action('rest_api_init', [$this, 'register_rest_routes']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_styles']);
     }
 
-    public function check_and_create_options() {
-        // Load pluggable.php once if it hasn't been loaded by WordPress core yet.
-        if (!function_exists('wp_generate_password')) {
-             require_once ABSPATH . 'wp-includes/pluggable.php';
+    /**
+     * Plugin activation hook.
+     */
+    public function activate() {
+        $this->init_keys(true); // Force regenerate on activation
+    }
+    
+    /**
+     * Enqueue styles for the admin page.
+     */
+    public function enqueue_admin_styles($hook) {
+        if ($hook !== 'toplevel_page_dev-console-connector') {
+            return;
         }
+        wp_add_inline_style('wp-admin', $this->get_admin_css());
+    }
 
-        // This runs once per page load and ensures options are always present.
-        if (!get_option(DC_CONNECTOR_KEY_OPTION)) {
-            // We now know wp_generate_password is available here
-            update_option(DC_CONNECTOR_KEY_OPTION, wp_generate_password(64, false, false));
+    /**
+     * Initializes security keys if they don't exist.
+     */
+    private function init_keys($force = false) {
+        if ($force || !get_option(self::CONNECTOR_KEY_OPTION)) {
+            update_option(self::CONNECTOR_KEY_OPTION, wp_generate_password(64, false, false));
         }
-        if (!get_option(DC_API_KEY_OPTION)) {
-            // We now know wp_generate_password is available here
-            update_option(DC_API_KEY_OPTION, wp_generate_password(64, false, false));
-        }
-        if (!get_option(DC_CORS_SETTINGS_OPTION)) {
-            add_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\nhttps://dev.ponsrischool.in\nhttps://ponsrischool.in"]);
+        if ($force || !get_option(self::API_KEY_OPTION)) {
+            update_option(self::API_KEY_OPTION, wp_generate_password(64, false, false));
         }
     }
 
+    /**
+     * Adds the plugin's settings page to the WordPress admin menu.
+     */
     public function add_admin_menu() {
-        add_options_page(
+        add_menu_page(
             'Dev-Console Connector',
             'Dev-Console',
             'manage_options',
             'dev-console-connector',
-            [$this, 'create_settings_page_html']
+            [$this, 'create_settings_page_html'],
+            'dashicons-code-standards',
+            81
         );
     }
 
+    /**
+     * Handles POST requests for the settings page (e.g., regenerating keys).
+     */
+    private function handle_settings_page_post() {
+        if (isset($_POST['dev_console_regenerate_keys']) && check_admin_referer('dev_console_regenerate_keys_nonce')) {
+            $this->init_keys(true);
+            echo '<div class="notice notice-success is-dismissible"><p>New security keys have been generated successfully.</p></div>';
+        }
+    }
+
+    /**
+     * Renders the HTML for the plugin's settings page.
+     */
     public function create_settings_page_html() {
+        if (!current_user_can('manage_options')) return;
+
+        $this->init_keys();
+        $this->handle_settings_page_post();
+
+        $connector_key = get_option(self::CONNECTOR_KEY_OPTION);
+        $api_key = get_option(self::API_KEY_OPTION);
         ?>
-        <div class="wrap">
-            <h1>Dev-Console Connector Settings</h1>
-            <p>Use the details below to connect your Dev-Console application to this WordPress site.</p>
+        <div class="wrap dev-console-wrap">
+            <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+            <p>Use the following keys to connect your site to the Dev-Console application.</p>
 
-            <h2>Connection Keys</h2>
-            <p>Copy these keys into the connection modal in the Dev-Console application.</p>
-            <table class="form-table" role="presentation">
-                <tbody>
-                    <tr>
-                        <th scope="row"><label for="dc_connector_key">Connector Key</label></th>
-                        <td>
-                            <input type="password" id="dc_connector_key" readonly value="<?php echo esc_attr(get_option(DC_CONNECTOR_KEY_OPTION)); ?>" class="regular-text" />
-                            <button type="button" class="button button-secondary" onclick="toggleKeyVisibility('dc_connector_key', this)">Show</button>
-                            <button type="button" class="button button-secondary" onclick="copyToClipboard('dc_connector_key', 'dc_connector_key_feedback')">Copy</button>
-                            <span id="dc_connector_key_feedback" style="margin-left: 10px; color: green; vertical-align: middle;"></span>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="dc_api_key">API Key</label></th>
-                        <td>
-                            <input type="password" id="dc_api_key" readonly value="<?php echo esc_attr(get_option(DC_API_KEY_OPTION)); ?>" class="regular-text" />
-                             <button type="button" class="button button-secondary" onclick="toggleKeyVisibility('dc_api_key', this)">Show</button>
-                             <button type="button" class="button button-secondary" onclick="copyToClipboard('dc_api_key', 'dc_api_key_feedback')">Copy</button>
-                             <span id="dc_api_key_feedback" style="margin-left: 10px; color: green; vertical-align: middle;"></span>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <hr/>
-
-            <div id="dc-connector-settings-form">
-                <?php
-                $options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => "http://localhost:5173\nhttps://dev.ponsrischool.in\nhttps://ponsrischool.in"]);
-                ?>
-                <h2>Security: Allowed Origins (CORS)</h2>
-                <p>Control which frontend domains can access this site's Connector API.</p>
-                <table class="form-table" role="presentation">
-                    <tbody>
-                         <tr>
-                            <th scope="row">Allow All Origins</th>
-                            <td>
-                                <input type="checkbox" id="dc_connector_allow_all" name="allow_all" <?php checked(isset($options['allow_all']) && $options['allow_all'], true); ?> />
-                                <p class="description"><strong>Warning:</strong> For development use only. Allows any domain to make requests.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="dc_connector_allowed_origins">Allowed Origins</label></th>
-                            <td>
-                                <textarea name="allowed_origins" rows="5" cols="50" class="large-text" id="dc_connector_allowed_origins"><?php echo esc_textarea($options['allowed_origins'] ?? ''); ?></textarea>
-                                <p class="description">Enter allowed domains, one per line (e.g., http://localhost:5173, https://dev.ponsrischool.in).</p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p class="submit">
-                    <button type="button" id="dc-save-connector-settings" class="button button-primary">Save CORS Settings</button>
-                    <span id="dc-connector-spinner" class="spinner" style="float: none; vertical-align: middle; margin-left: 10px;"></span>
-                    <span id="dc-connector-feedback" style="margin-left: 10px; vertical-align: middle;"></span>
-                </p>
+            <div class="dc-card">
+                <h2>Connection Keys</h2>
+                <p>Enter these keys into the Dev-Console application to establish a secure connection.</p>
+                <div class="dc-key-field">
+                    <label for="connector_key">Connector Key</label>
+                    <div class="dc-input-group">
+                        <input type="text" id="connector_key" value="<?php echo esc_attr($connector_key); ?>" readonly>
+                        <button class="button dc-copy-btn" data-clipboard-target="#connector_key">Copy</button>
+                    </div>
+                </div>
+                <div class="dc-key-field">
+                    <label for="api_key">API Key</label>
+                    <div class="dc-input-group">
+                        <input type="text" id="api_key" value="<?php echo esc_attr($api_key); ?>" readonly>
+                        <button class="button dc-copy-btn" data-clipboard-target="#api_key">Copy</button>
+                    </div>
+                </div>
             </div>
+
+            <div class="dc-card dc-card-danger">
+                <h2>Regenerate Keys</h2>
+                <p>If you suspect your keys have been compromised, you can regenerate them. This will immediately disconnect any currently connected applications.</p>
+                <form method="post" action="">
+                    <?php wp_nonce_field('dev_console_regenerate_keys_nonce'); ?>
+                    <input type="hidden" name="dev_console_regenerate_keys" value="1">
+                    <button type="submit" class="button button-primary" onclick="return confirm('Are you sure you want to regenerate the keys? This will break the existing connection.');">Regenerate Keys</button>
+                </form>
+            </div>
+             <p class="dc-footer">Dev-Console Connector Version <?php echo esc_html($this->get_plugin_version()); ?></p>
         </div>
         <script>
-            function toggleKeyVisibility(elementId, button) {
-                var keyInput = document.getElementById(elementId);
-                if (keyInput.type === 'password') {
-                    keyInput.type = 'text';
-                    button.textContent = 'Hide';
-                } else {
-                    keyInput.type = 'password';
-                    button.textContent = 'Show';
-                }
-            }
-
-            function copyToClipboard(elementId, feedbackId) {
-                var copyText = document.getElementById(elementId);
-                var feedbackSpan = document.getElementById(feedbackId);
-                
-                var originalType = copyText.type;
-                if (originalType === 'password') {
-                    copyText.type = 'text';
-                }
-
-                copyText.select();
-                copyText.setSelectionRange(0, 99999);
-                document.execCommand("copy");
-
-                if (originalType === 'password') {
-                    copyText.type = 'password';
-                }
-                
-                feedbackSpan.textContent = 'Copied!';
-                setTimeout(function() {
-                    feedbackSpan.textContent = '';
-                }, 2000);
-            }
-
             document.addEventListener('DOMContentLoaded', function() {
-                const allowAllCheckbox = document.getElementById('dc_connector_allow_all');
-                const originsTextarea = document.getElementById('dc_connector_allowed_origins');
-                const saveBtn = document.getElementById('dc-save-connector-settings');
-                const spinner = document.getElementById('dc-connector-spinner');
-                const feedback = document.getElementById('dc-connector-feedback');
-
-                const toggleTextarea = () => {
-                    if (originsTextarea && allowAllCheckbox) {
-                        originsTextarea.disabled = allowAllCheckbox.checked;
-                        originsTextarea.closest('tr').style.opacity = allowAllCheckbox.checked ? 0.6 : 1;
-                    }
-                };
-                if (allowAllCheckbox) {
-                    allowAllCheckbox.addEventListener('change', toggleTextarea);
-                    toggleTextarea();
+                if(typeof ClipboardJS === 'undefined') {
+                    var script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js';
+                    script.onload = function() {
+                        initializeClipboard();
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    initializeClipboard();
                 }
-
-                if (saveBtn) {
-                    saveBtn.addEventListener('click', function() {
-                        spinner.style.visibility = 'visible';
-                        feedback.textContent = '';
-                        saveBtn.disabled = true;
-
-                        const data = {
-                            allow_all: allowAllCheckbox.checked,
-                            allowed_origins: originsTextarea.value
-                        };
-
-                        fetch('<?php echo esc_url_raw(rest_url("dev-console/v1/connector-settings")); ?>', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-WP-Nonce': '<?php echo wp_create_nonce('wp_rest'); ?>'
-                            },
-                            body: JSON.stringify(data)
-                        })
-                        .then(response => {
-                            if (!response.ok) {
-                               return response.json().then(err => { throw new Error(err.message || 'HTTP error!') });
-                            }
-                            return response.json();
-                        })
-                        .then(result => {
-                            feedback.style.color = 'green';
-                            feedback.textContent = 'Settings Saved!';
-                        })
-                        .catch(error => {
-                            feedback.style.color = 'red';
-                            feedback.textContent = 'Error: ' + error.message;
-                        })
-                        .finally(() => {
-                            spinner.style.visibility = 'hidden';
-                            saveBtn.disabled = false;
-                            setTimeout(() => { feedback.textContent = ''; }, 3000);
-                        });
+                function initializeClipboard() {
+                    var clipboard = new ClipboardJS('.dc-copy-btn');
+                    clipboard.on('success', function(e) {
+                        var originalText = e.trigger.innerHTML;
+                        e.trigger.innerHTML = 'Copied!';
+                        setTimeout(function() {
+                            e.trigger.innerHTML = originalText;
+                        }, 2000);
+                        e.clearSelection();
                     });
                 }
             });
         </script>
         <?php
     }
+
+    /**
+     * Registers the REST API routes.
+     */
+    public function register_rest_routes() {
+        register_rest_route('dev-console/v1', '/execute', [
+            'methods'  => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'handle_rest_request'],
+            'permission_callback' => '__return_true' // We handle permissions manually.
+        ]);
+    }
     
-    public function handle_cors_headers($served, $result, $request, $server) {
-        $origin = get_http_origin();
-        if (!$origin) return $served;
-
-        $cors_options = get_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => false, 'allowed_origins' => '']);
-        $allowed = !empty($cors_options['allow_all']);
-
-        if (!$allowed) {
-            $allowed_origins = array_map('trim', preg_split("/[\\r\\n,]+/", $cors_options['allowed_origins'] ?? ''));
-            if (in_array($origin, $allowed_origins, true)) {
-                $allowed = true;
-            }
-        }
-
-        if ($allowed) {
-            header('Access-Control-Allow-Origin: ' . esc_url_raw($origin));
-            header('Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE');
-            header('Access-Control-Allow-Headers: Content-Type, X-Connector-Key, X-Api-Key, Authorization');
-            if ('OPTIONS' === $_SERVER['REQUEST_METHOD']) { status_header(200); exit(0); }
-        }
-        return $served;
-    }
-
-    public function register_routes() {
-        register_rest_route('dev-console/v1', '/execute', ['methods' => 'POST', 'callback' => [$this, 'handle_execute'], 'permission_callback' => [$this, 'permission_check']]);
-        register_rest_route('dev-console/v1', '/connector-settings', ['methods' => 'POST', 'callback' => [$this, 'handle_save_connector_settings'], 'permission_callback' => function() { return current_user_can('manage_options'); }]);
-    }
-
-    public function handle_save_connector_settings(WP_REST_Request $request) {
-        $params = $request->get_json_params();
-        update_option(DC_CORS_SETTINGS_OPTION, ['allow_all' => !empty($params['allow_all']), 'allowed_origins' => sanitize_textarea_field($params['allowed_origins'] ?? '')]);
-        return new WP_REST_Response(['success' => true], 200);
-    }
-
-    public function permission_check(WP_REST_Request $request) {
-        $key = $request->get_header('X-Connector-Key');
+    /**
+     * Authenticates the incoming REST request.
+     */
+    private function authenticate_request($request) {
+        $connector_key = $request->get_header('X-Connector-Key');
         $api_key = $request->get_header('X-Api-Key');
-        if (!hash_equals(get_option(DC_CONNECTOR_KEY_OPTION), $key) || !hash_equals(get_option(DC_API_KEY_OPTION), $api_key)) {
-            return new WP_Error('auth_failed', 'Invalid credentials provided in request headers.', ['status' => 403]);
+
+        if (!$connector_key || !$api_key) {
+            return new WP_Error('auth_failed', 'Missing authentication headers.', ['status' => 401]);
+        }
+        if (!hash_equals(get_option(self::CONNECTOR_KEY_OPTION), $connector_key) || !hash_equals(get_option(self::API_KEY_OPTION), $api_key)) {
+            return new WP_Error('auth_failed', 'Invalid authentication keys.', ['status' => 403]);
         }
         return true;
     }
 
-    public function handle_execute(WP_REST_Request $request) {
-        $params = $request->get_json_params();
-        $action = $params['action'] ?? null;
-        if (!$action) { return new WP_Error('invalid_request', 'No action specified.', ['status' => 400]); }
+    /**
+     * Main handler for all incoming REST requests.
+     */
+    public function handle_rest_request(WP_REST_Request $request) {
+        $auth = $this->authenticate_request($request);
+        if (is_wp_error($auth)) {
+            return $auth;
+        }
 
-        $method = 'action_' . $action;
-        if (method_exists($this, $method)) {
+        $body = $request->get_json_params();
+        $action = isset($body['action']) ? sanitize_key($body['action']) : '';
+        $payload = isset($body['payload']) ? $body['payload'] : [];
+
+        $method_name = '_action_' . $action;
+        if (method_exists($this, $method_name)) {
             try {
-                $data = $this->$method($params['payload'] ?? []);
-                return new WP_REST_Response(['success' => true, 'data' => $data], 200);
-            } catch (DC_Connector_Exception $e) {
-                error_log('[Dev-Console Connector] Action Failed: ' . $e->getMessage());
-                return new WP_Error('action_failed', $e->getMessage(), ['status' => 400]);
+                $result = $this->{$method_name}($payload);
+                return new WP_REST_Response(['success' => true, 'data' => $result], 200);
             } catch (Exception $e) {
-                error_log('[Dev-Console Connector] Unhandled Exception: ' . $e->getMessage());
-                return new WP_Error('server_error', 'An unexpected error occurred on the server. Check the server logs for more details.', ['status' => 500]);
+                return new WP_REST_Response(['success' => false, 'message' => $e->getMessage()], 500);
             }
         }
-        return new WP_Error('invalid_action', 'The specified action does not exist.', ['status' => 404]);
-    }
 
-    private function require_wp_admin_files() {
-        if (!function_exists('get_plugin_data')) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; }
-        if (!function_exists('wp_get_themes')) { require_once ABSPATH . 'wp-admin/includes/theme.php'; }
-        if (!function_exists('request_filesystem_credentials')) { require_once ABSPATH . 'wp-admin/includes/file.php'; }
+        return new WP_REST_Response(['success' => false, 'message' => 'Invalid action specified.'], 400);
     }
-
-    private function get_asset_path($id, $type) { return $type === 'plugin' ? WP_PLUGIN_DIR . '/' . dirname($id) : get_theme_root() . '/' . $id; }
     
-    private function backup_file($path, $id, $type, $rel_path) {
-        if (!file_exists($path) || !is_readable($path)) { return; }
-        $upload_dir = wp_upload_dir();
-        $backup_dir = $upload_dir['basedir'] . '/' . DC_BACKUP_DIR_FILES . '/' . $type . '/' . dirname($id) . '/' . dirname($rel_path);
-        wp_mkdir_p($backup_dir);
-        $backup_path = $backup_dir . '/' . basename($rel_path) . '.' . time() . '.bak';
-        if (!copy($path, $backup_path)) { error_log('[Dev-Console Connector] Failed to create backup for file: ' . $path); }
+    // --- START: Action Methods ---
+    
+    private function _action_ping($payload) {
+        return ['message' => 'pong', 'connector_version' => $this->get_plugin_version()];
     }
 
-    private function resolve_path($id, $type, $rel_path) {
-        $base = ($id === 'root') ? ABSPATH : $this->get_asset_path($id, $type);
-        $path = $base . '/' . $rel_path;
-        
-        $real_base = realpath($base);
-        $real_path = realpath($path);
-
-        if ($real_path === false || strpos($real_path, $real_base) !== 0) { throw new DC_Connector_Exception('Invalid file path or directory traversal attempt.'); }
-        if ($id === 'root' && in_array(basename($path), ['wp-config.php', '.htaccess'])) { throw new DC_Connector_Exception('Editing this sensitive file is not permitted.'); }
-        
-        return $path;
-    }
-
-    private function action_get_db_tables($payload) {
-        global $wpdb;
-        return $wpdb->get_col("SHOW TABLES");
-    }
-
-    private function action_get_asset_files($payload) {
-        $base_path = ($payload['assetIdentifier'] === 'root') ? ABSPATH : $this->get_asset_path($payload['assetIdentifier'], $payload['assetType']);
-        $files = [];
-        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base_path, FilesystemIterator::SKIP_DOTS | FilesystemIterator::UNIX_PATHS), RecursiveIteratorIterator::SELF_FIRST);
-        $exclusions = ['wp-admin', 'wp-includes', '.git', '.github', '.vscode', 'node_modules', 'vendor', 'wp-content/uploads', 'wp-content/cache', 'wp-content/upgrade', 'wp-config.php', '.htaccess', 'license.txt', 'readme.html'];
-        $exclude_patterns = array_map(function($item) use ($base_path) { return '#^' . preg_quote($base_path . $item, '#') . '#'; }, $exclusions);
-
-        foreach ($iterator as $file) {
-            if ($payload['assetIdentifier'] === 'root') {
-                $is_excluded = false;
-                foreach ($exclude_patterns as $pattern) { if (preg_match($pattern, $file->getPathname())) { $is_excluded = true; break; } }
-                if ($is_excluded) continue;
-            }
-            if ($file->isFile()) { $files[] = ['name' => ltrim(str_replace($base_path, '', $file->getPathname()), '/')]; }
+    private function _action_list_assets($payload) {
+        if (!function_exists('get_plugins') || !function_exists('wp_get_themes')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            require_once ABSPATH . 'wp-admin/includes/theme.php';
         }
-        usort($files, function($a, $b) { return strcmp($a['name'], $b['name']); });
-        return $files;
-    }
-
-    private function action_read_file_content($payload) {
-        $upload_dir = wp_upload_dir();
-        $backup_base_dir = realpath($upload_dir['basedir'] . '/' . DC_BACKUP_DIR_FILES);
-        $is_backup_read = strpos($payload['relativePath'], DC_BACKUP_DIR_FILES) !== false;
-
-        if ($is_backup_read && $backup_base_dir) {
-            $path = realpath($payload['relativePath']);
-            if ($path === false || strpos($path, $backup_base_dir) !== 0) {
-                throw new DC_Connector_Exception('Invalid backup file path.');
-            }
-        } else {
-            $path = $this->resolve_path($payload['assetIdentifier'], $payload['assetType'], $payload['relativePath']);
-        }
-
-        if (!is_readable($path)) throw new DC_Connector_Exception('File not found or not readable.');
-        $content = @file_get_contents($path);
-        if ($content === false) { throw new DC_Connector_Exception('Could not read file content. Check file permissions.'); }
-        return ['content' => $content];
-    }
-
-    private function action_write_file_content($payload) {
-        if (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) {
-            throw new DC_Connector_Exception('File editing is disabled on this site. To enable it, set DISALLOW_FILE_EDIT to false in your wp-config.php file.');
-        }
-        global $wp_filesystem;
-        if (!WP_Filesystem()) { throw new DC_Connector_Exception('Could not initialize WordPress Filesystem. Please check your wp-config.php for FS_METHOD or define filesystem credentials.'); }
-        $path = $this->resolve_path($payload['assetIdentifier'], $payload['assetType'], $payload['relativePath']);
-        if (file_exists($path)) { $this->backup_file($path, $payload['assetIdentifier'], $payload['assetType'], $payload['relativePath']); }
-        if (!$wp_filesystem->put_contents($path, $payload['content'], FS_CHMOD_FILE)) { throw new DC_Connector_Exception('Failed to write to file. This is likely a file permissions issue on your server. Ensure the web server has write access to the file: ' . esc_html($payload['relativePath'])); }
-        return ['status' => 'ok'];
-    }
-
-    private function action_create_site_backup($payload) {
-        $source_dir = WP_CONTENT_DIR;
-        $upload_dir = wp_upload_dir();
-        $backup_dir = $upload_dir['basedir'] . '/' . DC_BACKUP_DIR_SITE;
-        if (!wp_mkdir_p($backup_dir)) { throw new DC_Connector_Exception('Could not create backup directory in \`wp-content/uploads\`. Check permissions.'); }
-        
-        $file_name = 'site-backup-' . date('Y-m-d-H-i-s') . '.zip';
-        $zip_path = $backup_dir . '/' . $file_name;
-        $zip = new ZipArchive();
-        $content = false;
-
-        try {
-             if ($zip->open($zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) { throw new DC_Connector_Exception('Cannot create backup zip file in \`wp-content/uploads\`. Check directory permissions.'); }
-            
-            $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source_dir, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::LEAVES_ONLY);
-            foreach ($files as $name => $file) {
-                if (!$file->isDir()) {
-                    $filePath = $file->getRealPath();
-                    $relativePath = substr($filePath, strlen($source_dir) + 1);
-                    if (strpos($filePath, $backup_dir) === false) { $zip->addFile($filePath, $relativePath); }
-                }
-            }
-            if (!$zip->close()) { throw new DC_Connector_Exception('Failed to finalize the backup archive. There might be an issue with file permissions or disk space.'); }
-            
-            $file_size = filesize($zip_path);
-            if ($file_size > 50 * 1024 * 1024) { throw new DC_Connector_Exception('Backup file exceeds 50MB and cannot be transferred directly. Please use a dedicated backup solution.'); }
-
-            $content = file_get_contents($zip_path);
-            if ($content === false) { throw new DC_Connector_Exception('Could not read the created backup file for transfer.'); }
-        } finally {
-            if (file_exists($zip_path)) { unlink($zip_path); }
-        }
-        return ['status' => 'ok', 'fileName' => $file_name, 'content' => base64_encode($content)];
-    }
-
-    private function action_update_plugin_file($payload) {
-        global $wp_filesystem;
-        if (!WP_Filesystem()) { throw new DC_Connector_Exception('Could not initialize WordPress Filesystem. Please check your wp-config.php for FS_METHOD.'); }
-
-        $path = __FILE__;
-        if (!file_exists($path)) { throw new DC_Connector_Exception('Connector plugin file not found. The update cannot proceed.'); }
-        
-        copy($path, $path . '.bak');
-        if (!$wp_filesystem->put_contents($path, $payload['content'], FS_CHMOD_FILE)) {
-            copy($path . '.bak', $path); // Rollback on failure
-            @unlink($path . '.bak');
-            throw new DC_Connector_Exception('Failed to update plugin file. This is often a file permissions issue on your server.');
-        }
-        @unlink($path . '.bak');
-        return ['status' => 'ok', 'message' => 'Connector plugin updated successfully.'];
-    }
-
-    private function action_ping($payload) {
-        $this->require_wp_admin_files();
-        $plugin_data = get_plugin_data(__FILE__);
-        return [
-            'message' => 'pong',
-            'connector_version' => $plugin_data['Version']
-        ];
-    }
-
-    private function action_list_assets($payload) {
-        $this->require_wp_admin_files();
         $asset_type = $payload['assetType'];
         $results = [];
+
         if ($asset_type === 'plugin') {
-            $all_plugins = get_plugins();
-            $active_plugins = get_option('active_plugins');
-            foreach ($all_plugins as $path => $details) {
+            $plugins = get_plugins();
+            foreach ($plugins as $path => $details) {
                 $results[] = [
                     'type' => 'plugin',
                     'name' => $details['Name'],
                     'identifier' => $path,
                     'version' => $details['Version'],
-                    'isActive' => in_array($path, $active_plugins)
+                    'isActive' => is_plugin_active($path),
                 ];
             }
-        } else { // theme
-            $all_themes = wp_get_themes();
-            $active_theme = get_stylesheet();
-            foreach ($all_themes as $slug => $theme) {
+        } elseif ($asset_type === 'theme') {
+            $themes = wp_get_themes();
+            $current_theme = get_stylesheet();
+            foreach ($themes as $slug => $theme) {
                 $results[] = [
                     'type' => 'theme',
                     'name' => $theme->get('Name'),
                     'identifier' => $slug,
                     'version' => $theme->get('Version'),
-                    'isActive' => $slug === $active_theme
+                    'isActive' => ($slug === $current_theme),
                 ];
             }
         }
         return $results;
     }
-
-    private function action_toggle_asset_status($payload) {
-        $this->require_wp_admin_files();
+    
+     private function _action_toggle_asset_status($payload) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
         $asset_type = $payload['assetType'];
-        $id = $payload['assetIdentifier'];
-        $new_status = $payload['newStatus'];
+        $identifier = sanitize_text_field($payload['assetIdentifier']);
+        $new_status = (bool) $payload['newStatus'];
 
         if ($asset_type === 'plugin') {
             if ($new_status) {
-                $result = activate_plugin($id);
-                if (is_wp_error($result)) { throw new DC_Connector_Exception('Failed to activate plugin: ' . $result->get_error_message()); }
+                activate_plugin($identifier);
             } else {
-                deactivate_plugins($id);
+                deactivate_plugins($identifier);
             }
-        } else { // theme
-            if ($new_status) {
-                switch_theme($id);
-            } else {
-                throw new DC_Connector_Exception('Cannot deactivate the active theme. Switch to another theme to deactivate this one.');
-            }
-        }
-        return ['status' => 'ok'];
-    }
-
-    private function action_delete_asset($payload) {
-        $this->require_wp_admin_files();
-        $asset_type = $payload['assetType'];
-        $id = $payload['assetIdentifier'];
-
-        if ($asset_type === 'plugin') {
-            $result = delete_plugins([$id]);
-             if (is_wp_error($result)) { throw new DC_Connector_Exception($result->get_error_message()); }
-        } else {
-            $result = delete_theme($id);
-             if (is_wp_error($result)) { throw new DC_Connector_Exception($result->get_error_message()); }
-        }
-        return ['status' => 'ok'];
-    }
-
-    private function action_install_asset($payload) {
-        global $wp_filesystem;
-        if (!WP_Filesystem()) { throw new DC_Connector_Exception('Could not initialize WordPress Filesystem. Please check your wp-config.php for FS_METHOD.'); }
-
-        $asset_type = $payload['assetType'];
-        $asset_name_slug = sanitize_file_name($payload['assetName']);
-        $files = $payload['files'];
-        $base_path = ($asset_type === 'plugin') ? WP_PLUGIN_DIR : get_theme_root();
-        $asset_dir = $base_path . '/' . $asset_name_slug;
-
-        if ($wp_filesystem->exists($asset_dir)) {
-            throw new DC_Connector_Exception(ucfirst($asset_type) . " folder '" . esc_html($asset_name_slug) . "' already exists.");
-        }
-        if (!$wp_filesystem->mkdir($asset_dir)) { throw new DC_Connector_Exception('Could not create directory for the new ' . $asset_type . '. Check server permissions.'); }
-
-        foreach ($files as $file) {
-            $path = $asset_dir . '/' . $file['name'];
-            $dir = dirname($path);
-            if (!$wp_filesystem->exists($dir)) {
-                if (!$wp_filesystem->mkdir($dir, FS_CHMOD_DIR)) { throw new DC_Connector_Exception('Could not create subdirectory: ' . esc_html($dir)); }
-            }
-            if (!$wp_filesystem->put_contents($path, base64_decode($file['content']), FS_CHMOD_FILE)) {
-                throw new DC_Connector_Exception('Failed to write file: ' . esc_html($file['name']));
-            }
+        } elseif ($asset_type === 'theme' && $new_status) {
+            switch_theme($identifier);
         }
         return ['status' => 'ok'];
     }
     
-    private function action_get_file_history($payload) {
-        $upload_dir = wp_upload_dir();
-        $backup_dir = $upload_dir['basedir'] . '/' . DC_BACKUP_DIR_FILES . '/' . $payload['assetType'] . '/' . dirname($payload['assetIdentifier']) . '/' . dirname($payload['relativePath']);
-        if (!is_dir($backup_dir)) return [];
+    private function _action_delete_asset($payload) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/theme.php';
+
+        $asset_type = $payload['assetType'];
+        $identifier = sanitize_text_field($payload['assetIdentifier']);
         
-        $files = @scandir($backup_dir);
-        if ($files === false) { return []; }
-        $backups = [];
+        if ($asset_type === 'plugin') {
+            $result = delete_plugins([$identifier]);
+            if (is_wp_error($result)) throw new Exception($result->get_error_message());
+        } elseif ($asset_type === 'theme') {
+            $result = delete_theme($identifier);
+            if (is_wp_error($result)) throw new Exception($result->get_error_message());
+        }
+        return ['status' => 'deleted'];
+    }
+
+    private function _action_get_asset_files($payload) {
+        $identifier = sanitize_text_field($payload['assetIdentifier']);
+        $asset_type = $payload['assetType'];
+        $base_path = '';
+
+        if ($identifier === 'root') {
+             $base_path = ABSPATH;
+        } else if ($asset_type === 'plugin') {
+            $base_path = WP_PLUGIN_DIR . '/' . dirname($identifier);
+        } elseif ($asset_type === 'theme') {
+            $base_path = get_theme_root() . '/' . $identifier;
+        }
+
+        if (empty($base_path) || !is_dir($base_path)) {
+            throw new Exception("Asset directory not found.");
+        }
+        
+        $base_path = realpath($base_path);
+        
+        // Security Check: ensure we are within allowed directories
+        if (strpos($base_path, realpath(WP_CONTENT_DIR)) !== 0 && strpos($base_path, realpath(ABSPATH)) !== 0) {
+            throw new Exception("Access denied to this directory.");
+        }
+
+        $files = [];
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($base_path, RecursiveDirectoryIterator::SKIP_DOTS));
+        
+        foreach ($iterator as $file) {
+            if ($file->isDir()) continue;
+            // For root, show paths relative to ABSPATH, otherwise relative to asset base.
+            $relative_path = ($identifier === 'root')
+                ? str_replace(realpath(ABSPATH) . DIRECTORY_SEPARATOR, '', $file->getRealPath())
+                : str_replace($base_path . DIRECTORY_SEPARATOR, '', $file->getRealPath());
+            $files[] = ['name' => $relative_path];
+        }
+        return $files;
+    }
+    
+     private function _action_read_file_content($payload) {
+        $file_path = $this->get_validated_path($payload);
+        if (!is_readable($file_path)) {
+            throw new Exception("File is not readable or does not exist.");
+        }
+        return ['content' => file_get_contents($file_path)];
+    }
+
+    private function _action_write_file_content($payload) {
+        $file_path = $this->get_validated_path($payload);
+        $content = $payload['content']; // No sanitization, as it's code.
+
+        $this->create_file_backup($file_path);
+        
+        if (file_put_contents($file_path, $content) === false) {
+            throw new Exception("Failed to write to file. Check permissions.");
+        }
+        return ['status' => 'saved'];
+    }
+
+    private function _action_install_asset($payload) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        
+        $asset_type = $payload['assetType'];
+        $asset_name = sanitize_file_name($payload['assetName']);
+        $files = $payload['files'];
+        $base_dir = '';
+
+        if ($asset_type === 'plugin') {
+            $base_dir = WP_PLUGIN_DIR;
+        } elseif ($asset_type === 'theme') {
+            $base_dir = get_theme_root();
+        } else {
+            throw new Exception("Invalid asset type.");
+        }
+
+        $asset_dir = $base_dir . '/' . $asset_name;
+        if (!wp_mkdir_p($asset_dir)) {
+            throw new Exception("Could not create asset directory.");
+        }
+        
         foreach ($files as $file) {
-            if (strpos($file, basename($payload['relativePath'])) === 0 && strpos($file, '.bak') !== false) {
-                 $parts = explode('.', $file);
-                 $timestamp = $parts[count($parts) - 2];
-                 $backups[] = ['path' => $backup_dir . '/' . $file, 'timestamp' => $timestamp];
+            $path_parts = explode('/', $file['name']);
+            $file_name = sanitize_file_name(array_pop($path_parts));
+            $sub_dir = implode('/', $path_parts);
+            
+            $full_dir = $asset_dir;
+            if ($sub_dir) {
+                $full_dir .= '/' . $sub_dir;
+                if (!wp_mkdir_p($full_dir)) {
+                    throw new Exception("Could not create subdirectory: " . $sub_dir);
+                }
+            }
+            
+            $file_path = $full_dir . '/' . $file_name;
+            $decoded_content = base64_decode($file['content']);
+            if (file_put_contents($file_path, $decoded_content) === false) {
+                throw new Exception("Failed to write file: " . $file_name);
             }
         }
-        rsort($backups);
-        return $backups;
+        return ['status' => 'installed'];
     }
 
-    private function action_restore_file($payload) {
-        global $wp_filesystem;
-        if (!WP_Filesystem()) { throw new DC_Connector_Exception('Could not initialize WordPress Filesystem. Please check your wp-config.php for FS_METHOD.'); }
-        $target_path = $this->resolve_path($payload['assetIdentifier'], $payload['assetType'], $payload['relativePath']);
-        $backup_path = $payload['backupPath'];
-
-        $upload_dir = wp_upload_dir();
-        if (strpos(realpath($backup_path), realpath($upload_dir['basedir'])) !== 0) {
-            throw new DC_Connector_Exception('Invalid backup path. Directory traversal is not permitted.');
-        }
-
-        if (!file_exists($backup_path)) { throw new DC_Connector_Exception('Backup file not found.'); }
-        
-        $this->backup_file($target_path, $payload['assetIdentifier'], $payload['assetType'], $payload['relativePath']);
-        
-        if (!$wp_filesystem->copy($backup_path, $target_path, true)) {
-            throw new DC_Connector_Exception('Failed to restore file. Check file permissions.');
-        }
-        return ['status' => 'ok'];
-    }
-
-    private function action_execute_safe_db_query($payload) {
+    private function _action_get_db_tables($payload) {
         global $wpdb;
-        $queryType = $payload['queryType'];
-        $params = $payload['params'] ?? [];
-
-        switch ($queryType) {
-            case 'get_options':
-                $optionNames = $params['optionNames'] ?? [];
-                if (empty($optionNames) || !is_array($optionNames)) return [];
-                $placeholders = implode(', ', array_fill(0, count($optionNames), '%s'));
-                return $wpdb->get_results($wpdb->prepare("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name IN ($placeholders)", ...$optionNames), ARRAY_A);
-            case 'list_posts':
-                $post_type = isset($params['postType']) ? sanitize_key($params['postType']) : 'post';
-                $limit = isset($params['limit']) ? intval($params['limit']) : 10;
-                $offset = isset($params['offset']) ? intval($params['offset']) : 0;
-                 return get_posts(['post_type' => $post_type, 'numberposts' => $limit, 'offset' => $offset, 'post_status' => 'any']);
-            default:
-                throw new DC_Connector_Exception("Unsupported or invalid query type specified.");
-        }
+        $tables = $wpdb->get_results("SHOW TABLES", ARRAY_N);
+        return array_map(function($row) { return $row[0]; }, $tables);
     }
 
-    private function action_run_security_scan($payload) {
+    private function _action_execute_safe_db_query($payload) {
         global $wpdb;
+        $query_type = $payload['queryType'];
+        $params = $payload['params'];
         $results = [];
-        $results[] = ['id' => 'wp_debug', 'title' => 'WP_DEBUG is Disabled on Live Site', 'status' => (defined('WP_DEBUG') && WP_DEBUG) ? 'fail' : 'pass', 'severity' => 'High', 'description' => 'WP_DEBUG should be turned off on a live website as it can expose sensitive information.', 'recommendation' => 'Set WP_DEBUG to false in your wp-config.php file for production environments.'];
 
-        $response = wp_remote_get(get_site_url() . '/wp-includes/');
-        if (is_wp_error($response)) {
-             $dir_listing_status = 'warn';
-             $dir_listing_desc = 'Could not check for directory listing. The site may not be publicly accessible from the server itself. Error: ' . $response->get_error_message();
-        } else {
-             $body = wp_remote_retrieve_body($response);
-             $dir_listing_status = (strpos($body, '<title>Index of') !== false) ? 'fail' : 'pass';
-             $dir_listing_desc = 'Directory listing can reveal sensitive file names to attackers.';
+        switch ($query_type) {
+            case 'get_options':
+                $option_names = array_map('sanitize_text_field', $params['optionNames']);
+                foreach ($option_names as $name) {
+                    $results[] = ['option_name' => $name, 'option_value' => get_option($name)];
+                }
+                break;
+            case 'list_posts':
+                $args = [
+                    'post_type' => sanitize_text_field($params['postType'] ?? 'post'),
+                    'posts_per_page' => (int)($params['limit'] ?? 10),
+                    'offset' => (int)($params['offset'] ?? 0),
+                ];
+                $query = new WP_Query($args);
+                foreach ($query->posts as $post) {
+                    $results[] = [
+                        'ID' => $post->ID,
+                        'post_title' => $post->post_title,
+                        'post_status' => $post->post_status,
+                        'post_date' => $post->post_date,
+                    ];
+                }
+                break;
+            default:
+                throw new Exception("Unsupported safe query type.");
         }
-        $results[] = ['id' => 'dir_listing', 'title' => 'Directory Listing is Disabled', 'status' => $dir_listing_status, 'severity' => 'Medium', 'description' => $dir_listing_desc, 'recommendation' => 'Add "Options -Indexes" to your .htaccess file to disable directory browsing.'];
-
-        $admin_user = get_user_by('login', 'admin');
-        $results[] = ['id' => 'default_admin', 'title' => 'Default "admin" User Does Not Exist', 'status' => $admin_user ? 'fail' : 'pass', 'severity' => 'High', 'description' => 'Using the default "admin" username makes brute-force attacks easier.', 'recommendation' => 'Create a new administrator account with a unique username and delete the default "admin" account.'];
-$results[] = [
-    'id' => 'file_edit', 
-    'title' => 'File Editing Status', 
-    'status' => (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) ? 'fail' : 'pass', 
-    'severity' => 'Medium', 
-    'description' => 'File editing must be enabled for the Dev-Console to write to files. If disabled, write operations will fail.', 
-    'recommendation' => "To fix this, set \`define('DISALLOW_FILE_EDIT', false);\` in your wp-config.php file or remove the line defining it."
-];
-        $results[] = ['id' => 'db_prefix', 'title' => 'Database Prefix is Not Default', 'status' => ($wpdb->prefix === 'wp_') ? 'fail' : 'pass', 'severity' => 'Medium', 'description' => 'Using the default "wp_" database prefix makes SQL injection attacks easier.', 'recommendation' => 'Use a unique database prefix. This requires a more involved process to change on an existing site.'];
-
         return $results;
     }
 
-    private function action_get_debug_log($payload) {
-        $log_path = WP_CONTENT_DIR . '/debug.log';
-        if (!file_exists($log_path) || !is_readable($log_path)) {
-            throw new DC_Connector_Exception('debug.log file does not exist or is not readable. Ensure WP_DEBUG_LOG is enabled in wp-config.php.');
-        }
-        $content = @file_get_contents($log_path);
-        if ($content === false) { throw new DC_Connector_Exception('Could not read debug.log. Check file permissions.'); }
-        return ['content' => $content];
+    private function _action_run_security_scan($payload) {
+        $results = [];
+        $results[] = [
+            'id' => 'debug_mode',
+            'title' => 'WP_DEBUG is Disabled in Production',
+            'description' => 'Checks if WP_DEBUG constant is disabled on a production site.',
+            'status' => defined('WP_DEBUG') && WP_DEBUG ? 'fail' : 'pass',
+            'severity' => 'Medium',
+            'recommendation' => 'Set WP_DEBUG to false in your wp-config.php file on live sites.'
+        ];
+        global $wp_version;
+        $results[] = [
+            'id' => 'wp_version',
+            'title' => 'WordPress Version is Up-to-date',
+            'description' => 'Checks if the current WordPress version is the latest.',
+            'status' => 'info', // Can\'t check for latest version from here
+            'severity' => 'Info',
+            'recommendation' => 'Current version is ' . $wp_version . '. Always keep WordPress updated.'
+        ];
+        $admin_user = get_user_by('login', 'admin');
+        $results[] = [
+            'id' => 'default_admin',
+            'title' => 'Default "admin" User Does Not Exist',
+            'description' => 'Checks if the default "admin" username exists.',
+            'status' => $admin_user ? 'fail' : 'pass',
+            'severity' => 'High',
+            'recommendation' => 'Delete the default "admin" user and create a new administrator with a unique username.'
+        ];
+        return $results;
     }
+    
+    private function _action_get_debug_log($payload) {
+        $log_path = WP_CONTENT_DIR . '/debug.log';
+        if (!is_readable($log_path)) {
+            throw new Exception("debug.log not found or not readable. Ensure WP_DEBUG_LOG is enabled in wp-config.php.");
+        }
+        return ['content' => file_get_contents($log_path)];
+    }
+    
+    private function _action_create_site_backup($payload) {
+        $backup_dir = $this->get_backup_dir();
+        $file_name = 'backup-' . date('Y-m-d_H-i-s') . '.zip';
+        $zip_path = $backup_dir . '/' . $file_name;
+        
+        $zip = new ZipArchive();
+        if ($zip->open($zip_path, ZipArchive::CREATE) !== TRUE) {
+            throw new Exception("Cannot create zip archive.");
+        }
+        
+        $source = realpath(WP_CONTENT_DIR);
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($source, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
 
-    private function action_list_site_backups($payload) {
-        $upload_dir = wp_upload_dir();
-        $backup_dir = $upload_dir['basedir'] . '/' . DC_BACKUP_DIR_SITE;
-        if (!is_dir($backup_dir)) return [];
-
-        $files = @scandir($backup_dir);
-        if ($files === false) { return []; }
-        $backups = [];
-        foreach ($files as $file) {
-            if (pathinfo($file, PATHINFO_EXTENSION) === 'zip') {
-                $filepath = $backup_dir . '/' . $file;
-                $backups[] = [
-                    'name' => $file,
-                    'size' => filesize($filepath),
-                    'date' => filemtime($filepath)
-                ];
+        foreach ($files as $name => $file) {
+            if (!$file->isDir()) {
+                $filePath = $file->getRealPath();
+                $relativePath = substr($filePath, strlen($source) + 1);
+                $zip->addFile($filePath, $relativePath);
             }
         }
-        usort($backups, function($a, $b) { return $b['date'] - $a['date']; });
-        return $backups;
+        $zip->close();
+        
+        return [
+            'status' => 'Backup created',
+            'fileName' => $file_name,
+            'content' => base64_encode(file_get_contents($zip_path))
+        ];
+    }
+    
+    private function _action_list_site_backups($payload) {
+        $backup_dir = $this->get_backup_dir();
+        $files = array_diff(scandir($backup_dir), ['.', '..', '.htaccess', 'index.php']);
+        $results = [];
+        foreach($files as $file) {
+             if (pathinfo($file, PATHINFO_EXTENSION) === 'zip') {
+                $path = $backup_dir . '/' . $file;
+                $results[] = [
+                    'name' => $file,
+                    'size' => filesize($path),
+                    'date' => filemtime($path)
+                ];
+             }
+        }
+        return $results;
+    }
+    
+     private function _action_update_plugin_file($payload) {
+        if ($payload['plugin_type'] !== 'connector') {
+            throw new Exception("This action is only for the connector plugin.");
+        }
+        $content = $payload['content'];
+        $plugin_file_path = __FILE__;
+
+        if (!is_writable($plugin_file_path)) {
+             throw new Exception("Connector plugin file is not writable.");
+        }
+        
+        if (file_put_contents($plugin_file_path, $content) === false) {
+            throw new Exception("Failed to write new plugin content.");
+        }
+        return ['status' => 'Connector plugin updated. Please reactivate if necessary.'];
+    }
+
+    // --- START: Helper Methods ---
+
+    private function get_validated_path($payload) {
+        $identifier = sanitize_text_field($payload['assetIdentifier']);
+        $asset_type = $payload['assetType'];
+        $relative_path = $payload['relativePath']; // Will sanitize parts
+        
+        $base_path = '';
+        if ($identifier === 'root') {
+             $base_path = ABSPATH;
+        } else if ($asset_type === 'plugin') {
+            $base_path = WP_PLUGIN_DIR . '/' . dirname($identifier);
+        } elseif ($asset_type === 'theme') {
+            $base_path = get_theme_root() . '/' . $identifier;
+        } else {
+            throw new Exception("Invalid asset type for path validation.");
+        }
+        
+        $base_path = realpath($base_path);
+        
+        // Prevent directory traversal by sanitizing each part of the relative path
+        $path_parts = explode('/', $relative_path);
+        $safe_parts = [];
+        foreach ($path_parts as $part) {
+            if ($part === '..') continue;
+            $safe_parts[] = sanitize_file_name($part);
+        }
+        $safe_relative_path = implode('/', $safe_parts);
+        
+        $full_path = realpath($base_path . '/' . $safe_relative_path);
+
+        // Security check: ensure the final real path starts with the expected base path
+        if (!$full_path || strpos($full_path, $base_path) !== 0) {
+            throw new Exception("Invalid file path or access denied.");
+        }
+        return $full_path;
+    }
+
+    private function create_file_backup($file_path) {
+        $backup_dir = dirname($file_path) . '/.dc_backups';
+        if (!is_dir($backup_dir)) wp_mkdir_p($backup_dir);
+
+        $backup_file = $backup_dir . '/' . basename($file_path) . '.' . time() . '.bak';
+        if (!copy($file_path, $backup_file)) {
+            // Non-fatal, just log it.
+            error_log('Dev-Console: Failed to create file backup for ' . $file_path);
+        }
+    }
+
+    private function get_plugin_version() {
+        $plugin_data = get_plugin_data(__FILE__);
+        return $plugin_data['Version'];
+    }
+
+    private function get_backup_dir() {
+        $upload_dir = wp_upload_dir();
+        $backup_dir = $upload_dir['basedir'] . '/dev-console-backups';
+        if (!is_dir($backup_dir)) {
+            wp_mkdir_p($backup_dir);
+            // Add security files
+            file_put_contents($backup_dir . '/.htaccess', 'deny from all');
+            file_put_contents($backup_dir . '/index.php', '<?php // Silence is golden.');
+        }
+        return $backup_dir;
+    }
+    
+    private function get_admin_css() {
+        return "
+        .dev-console-wrap .dc-card { background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 20px; margin-top: 20px; }
+        .dev-console-wrap .dc-card h2 { margin-top: 0; }
+        .dev-console-wrap .dc-key-field { margin-bottom: 15px; }
+        .dev-console-wrap .dc-key-field label { font-weight: bold; display: block; margin-bottom: 5px; }
+        .dev-console-wrap .dc-input-group { display: flex; }
+        .dev-console-wrap .dc-input-group input { flex-grow: 1; font-family: monospace; }
+        .dev-console-wrap .dc-copy-btn { margin-left: 5px; }
+        .dev-console-wrap .dc-card-danger { border-left: 4px solid #d63638; }
+        .dev-console-wrap .dc-footer { margin-top: 20px; color: #777; font-size: 12px; }
+        ";
     }
 }
 
-/**
- * Begins execution of the plugin.
- *
- * Since everything within the plugin is registered via hooks in the constructor,
- * we only need to instantiate the class to get things rolling.
- */
 function dev_console_connector_run() {
     return Dev_Console_Connector::get_instance();
 }
 
-// Run the plugin
 dev_console_connector_run();
 ?>
 `;

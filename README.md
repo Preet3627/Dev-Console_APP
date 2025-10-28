@@ -145,4 +145,4 @@ To connect the Dev-Console to a WordPress site, you must install the `dev-consol
 1.  Log into the Dev-Console application.
 2.  Click the "Connect" button in the header.
 3.  Follow the instructions in the modal to download the plugin and install it on your WordPress site.
-4.  Once activated, navigate to **Connector** in your WordPress admin dashboard menu to find the **Connector Key** and **API Key** required to complete the connection.
+4.  Once activated, navigate to **Settings &rarr; Connector** in your WordPress admin dashboard menu to find the **Connector Key** and **API Key** required to complete the connection.
