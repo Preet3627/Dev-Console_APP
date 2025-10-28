@@ -2,8 +2,7 @@ export interface SiteData {
     id: number;
     name: string;
     siteUrl: string;
-    connectorKey: string;
-    apiKey: string;
+    accessKey: string;
 }
 
 export type AiProvider = 'gemini' | 'openai' | 'claude' | 'groq' | 'perplexity';

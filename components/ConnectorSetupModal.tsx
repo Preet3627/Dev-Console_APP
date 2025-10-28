@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { CloseIcon, ConnectIcon, DownloadIcon, CopyIcon } from './icons/Icons';
 import { pluginSourceCode } from '../plugin-source.js';
@@ -15,8 +16,7 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
     const [step, setStep] = useState(1);
     const [siteName, setSiteName] = useState('');
     const [siteUrl, setSiteUrl] = useState('');
-    const [connectorKey, setConnectorKey] = useState('');
-    const [apiKey, setApiKey] = useState('');
+    const [accessKey, setAccessKey] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [copyText, setCopyText] = useState('Copy Source Code');
@@ -43,7 +43,7 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
     const handleConnect = async () => {
         setError('');
         setIsLoading(true);
-        if (!siteName || !siteUrl || !connectorKey || !apiKey) {
+        if (!siteName || !siteUrl || !accessKey) {
             setError('All fields are required.');
             setIsLoading(false);
             return;
@@ -56,8 +56,7 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Connector-Key': connectorKey,
-                    'X-Api-Key': apiKey,
+                    'X-Access-Key': accessKey,
                 },
                 body: JSON.stringify({ action: 'ping' })
             });
@@ -65,7 +64,7 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
             const data = await response.json();
             if (response.ok && data.data?.message === 'pong') {
                 // Step 2: Save the verified details to the user's account via the backend
-                const dataToEncrypt = { siteUrl, connectorKey, apiKey };
+                const dataToEncrypt = { siteUrl, accessKey };
                 const encryptedData = encryptData(dataToEncrypt);
                 
                 const newSite = await addSite(siteName, encryptedData);
@@ -77,10 +76,10 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
                     ...dataToEncrypt
                 });
             } else {
-                 setError(`Connection failed: ${data.message || 'Invalid credentials or URL.'}`);
+                 setError(`Connection failed: ${data.message || 'Invalid credentials, URL, or CORS settings on your WordPress site.'}`);
             }
         } catch (err) {
-            setError(`Failed to connect or save settings: ${(err as Error).message}`);
+            setError(`Failed to connect or save settings: ${(err as Error).message}. Check your browser's console for CORS errors.`);
         } finally {
             setIsLoading(false);
         }
@@ -113,7 +112,7 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
                                     <li>Click the "Download Plugin" button to get the connector plugin's PHP file.</li>
                                     <li>In your WordPress admin, go to "Plugins" &gt; "Add New" &gt; "Upload Plugin".</li>
                                     <li>Upload the downloaded file and activate the plugin.</li>
-                                    <li>Once activated, find your keys under "Connector" in your WordPress admin menu for the next step.</li>
+                                    <li>Once activated, find your Access Key under the "Dev-Console" menu in your WordPress admin dashboard for the next step.</li>
                                 </ol>
                             </div>
                             <div className="mt-4 flex space-x-4">
@@ -132,7 +131,7 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
                         <div className="space-y-4">
                             <h3 className="text-xl font-semibold">Step 2: Enter Connection Details</h3>
                              <p className="text-text-secondary">
-                                Find the required keys in the plugin's settings page within your WordPress admin dashboard.
+                                Find the required key in the plugin's settings page ("Dev-Console") within your WordPress admin dashboard.
                             </p>
                             <div className="space-y-4">
                                 <div>
@@ -144,12 +143,8 @@ const ConnectorSetupModal: React.FC<ConnectorSetupModalProps> = ({ onClose, onSi
                                     <input type="text" value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} className="input-field mt-1" placeholder="https://example.com" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium">Connector Key</label>
-                                    <input type="password" value={connectorKey} onChange={(e) => setConnectorKey(e.target.value)} className="input-field mt-1" placeholder="Paste Connector Key from plugin settings" />
-                                </div>
-                                 <div>
-                                    <label className="block text-sm font-medium">API Key</label>
-                                    <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="input-field mt-1" placeholder="Paste API Key from plugin settings" />
+                                    <label className="block text-sm font-medium">Access Key</label>
+                                    <input type="password" value={accessKey} onChange={(e) => setAccessKey(e.target.value)} className="input-field mt-1" placeholder="Paste Access Key from plugin settings" />
                                 </div>
                             </div>
                         </div>

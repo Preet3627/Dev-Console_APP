@@ -1,6 +1,8 @@
 
 
 
+
+
 import { SiteData, AppSettings, Asset, AssetType, AssetFile, BackupFile, SecurityIssue, ErrorLog, BackendConfigStatus, WordpressSeoData, AppSeoSettings } from '../types';
 import { getSecureItem, setSecureItem, removeSecureItem, encryptData, decryptData } from '../utils/secureLocalStorage';
 
@@ -41,15 +43,14 @@ const masterApiFetch = async (endpoint: string, options: RequestInit = {}): Prom
 
 // Generic fetch function for the CONNECTOR plugin API (site-specific actions)
 const connectorApiFetch = async (siteData: SiteData, payload: object): Promise<any> => {
-    const { siteUrl, connectorKey, apiKey } = siteData;
+    const { siteUrl, accessKey } = siteData;
     const url = `${siteUrl.replace(/\/$/, '')}/wp-json/dev-console/v1/execute`;
 
     const response = await fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Connector-Key': connectorKey,
-            'X-Api-Key': apiKey,
+            'X-Access-Key': accessKey,
         },
         body: JSON.stringify(payload),
     });
@@ -166,7 +167,7 @@ export const deleteSite = async (id: number): Promise<void> => {
 export const getAllSites = async (): Promise<SiteData[]> => {
     const response = await masterApiFetch('/sites'); // response is [{ id, name, site_data_encrypted }]
     return response.map((site: any) => {
-        const decrypted = decryptData<{ siteUrl: string; connectorKey: string; apiKey: string; }>(site.site_data_encrypted);
+        const decrypted = decryptData<{ siteUrl: string; accessKey: string; }>(site.site_data_encrypted);
         if (!decrypted) return null;
         return {
             id: site.id,

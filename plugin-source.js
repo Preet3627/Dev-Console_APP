@@ -3,7 +3,7 @@ export const pluginSourceCode = `<?php
  * Plugin Name: Dev-Console Connector
  * Plugin URI: https://ponsrischool.in
  * Description: Securely connects your WordPress site to the Dev-Console application, enabling AI-powered management and development.
- * Version: 4.0.0
+ * Version: 4.1.0
  * Author: PM-SHRI
  * Author URI: https://ponsrischool.in
  */
@@ -15,8 +15,10 @@ if (!defined('ABSPATH')) {
 final class Dev_Console_Connector {
 
     private static $instance;
-    const CONNECTOR_KEY_OPTION = 'dev_console_connector_key';
-    const API_KEY_OPTION = 'dev_console_api_key';
+    const ACCESS_KEY_OPTION = 'dev_console_access_key';
+    const CORS_ALLOW_ALL_OPTION = 'dev_console_cors_allow_all';
+    const CORS_ALLOWED_ORIGINS_OPTION = 'dev_console_cors_allowed_origins';
+
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -29,14 +31,14 @@ final class Dev_Console_Connector {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_styles']);
-        add_action('plugins_loaded', [$this, 'init_keys']);
+        add_action('plugins_loaded', [$this, 'init_settings']);
     }
 
     /**
      * Plugin activation hook.
      */
     public function activate() {
-        $this->init_keys(true); // Force regenerate on activation
+        $this->init_settings(true); // Force regenerate on activation
     }
     
     /**
@@ -50,14 +52,17 @@ final class Dev_Console_Connector {
     }
 
     /**
-     * Initializes security keys if they don't exist.
+     * Initializes security keys and default settings if they don't exist.
      */
-    private function init_keys($force = false) {
-        if ($force || !get_option(self::CONNECTOR_KEY_OPTION)) {
-            update_option(self::CONNECTOR_KEY_OPTION, wp_generate_password(64, false, false));
+    private function init_settings($force = false) {
+        if ($force || !get_option(self::ACCESS_KEY_OPTION)) {
+            update_option(self::ACCESS_KEY_OPTION, wp_generate_password(64, false, false));
         }
-        if ($force || !get_option(self::API_KEY_OPTION)) {
-            update_option(self::API_KEY_OPTION, wp_generate_password(64, false, false));
+        if (get_option(self::CORS_ALLOWED_ORIGINS_OPTION) === false) {
+             update_option(self::CORS_ALLOWED_ORIGINS_OPTION, 'https://dev-console-app-delta.vercel.app/');
+        }
+        if (get_option(self::CORS_ALLOW_ALL_OPTION) === false) {
+             update_option(self::CORS_ALLOW_ALL_OPTION, '0');
         }
     }
 
@@ -80,9 +85,17 @@ final class Dev_Console_Connector {
      * Handles POST requests for the settings page (e.g., regenerating keys).
      */
     private function handle_settings_page_post() {
-        if (isset($_POST['dev_console_regenerate_keys']) && check_admin_referer('dev_console_regenerate_keys_nonce')) {
-            $this->init_keys(true);
-            echo '<div class="notice notice-success is-dismissible"><p>New security keys have been generated successfully.</p></div>';
+        if (isset($_POST['dev_console_regenerate_key']) && check_admin_referer('dev_console_regenerate_key_nonce')) {
+            $this->init_settings(true);
+            echo '<div class="notice notice-success is-dismissible"><p>New Access Key has been generated successfully.</p></div>';
+        }
+        if (isset($_POST['dev_console_save_settings']) && check_admin_referer('dev_console_save_settings_nonce')) {
+            $allow_all = isset($_POST['cors_allow_all']) ? '1' : '0';
+            $allowed_origins = isset($_POST['cors_allowed_origins']) ? sanitize_textarea_field($_POST['cors_allowed_origins']) : '';
+            
+            update_option(self::CORS_ALLOW_ALL_OPTION, $allow_all);
+            update_option(self::CORS_ALLOWED_ORIGINS_OPTION, $allowed_origins);
+            echo '<div class="notice notice-success is-dismissible"><p>CORS settings saved.</p></div>';
         }
     }
 
@@ -92,54 +105,95 @@ final class Dev_Console_Connector {
     public function create_settings_page_html() {
         if (!current_user_can('manage_options')) return;
 
-        $this->init_keys();
+        $this->init_settings();
         $this->handle_settings_page_post();
 
-        $connector_key = get_option(self::CONNECTOR_KEY_OPTION);
-        $api_key = get_option(self::API_KEY_OPTION);
+        $access_key = get_option(self::ACCESS_KEY_OPTION);
+        $cors_allow_all = get_option(self::CORS_ALLOW_ALL_OPTION, '0');
+        $cors_allowed_origins = get_option(self::CORS_ALLOWED_ORIGINS_OPTION, '');
+
         ?>
         <div class="wrap dev-console-wrap">
             <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-            <p>Use the following keys to connect your site to the Dev-Console application.</p>
+            <p>Use the following key to connect your site to the Dev-Console application.</p>
 
             <div class="dc-card">
-                <h2>Connection Keys</h2>
-                <p>Enter these keys into the Dev-Console application to establish a secure connection.</p>
+                <h2>Connection Key</h2>
+                <p>Enter this key into the Dev-Console application to establish a secure connection.</p>
                 <div class="dc-key-field">
-                    <label for="connector_key">Connector Key</label>
+                    <label for="access_key">Access Key</label>
                     <div class="dc-input-group">
-                        <input type="text" id="connector_key" value="<?php echo esc_attr($connector_key); ?>" readonly>
-                        <button class="button dc-copy-btn" data-clipboard-target="#connector_key">Copy</button>
-                    </div>
-                </div>
-                <div class="dc-key-field">
-                    <label for="api_key">API Key</label>
-                    <div class="dc-input-group">
-                        <input type="text" id="api_key" value="<?php echo esc_attr($api_key); ?>" readonly>
-                        <button class="button dc-copy-btn" data-clipboard-target="#api_key">Copy</button>
+                        <input type="password" id="access_key" value="<?php echo esc_attr($access_key); ?>" readonly>
+                        <button class="button dc-show-hide-btn" type="button">Show</button>
+                        <button class="button dc-copy-btn" data-clipboard-target="#access_key">Copy</button>
                     </div>
                 </div>
             </div>
 
-            <div class="dc-card dc-card-danger">
-                <h2>Regenerate Keys</h2>
-                <p>If you suspect your keys have been compromised, you can regenerate them. This will immediately disconnect any currently connected applications.</p>
+            <div class="dc-card">
+                <h2>CORS & Security</h2>
+                <p>Control which domains can access this site's API. This is crucial for security.</p>
                 <form method="post" action="">
-                    <?php wp_nonce_field('dev_console_regenerate_keys_nonce'); ?>
-                    <input type="hidden" name="dev_console_regenerate_keys" value="1">
-                    <button type="submit" class="button button-primary" onclick="return confirm('Are you sure you want to regenerate the keys? This will break the existing connection.');">Regenerate Keys</button>
+                    <?php wp_nonce_field('dev_console_save_settings_nonce'); ?>
+                    <table class="form-table" role="presentation">
+                        <tbody>
+                            <tr>
+                                <th scope="row">Allow All Origins</th>
+                                <td>
+                                    <label for="cors_allow_all">
+                                        <input name="cors_allow_all" type="checkbox" id="cors_allow_all" value="1" <?php checked('1', $cors_allow_all); ?>>
+                                        Enable access from any origin (<code>*</code>). <strong>Not recommended for production.</strong>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="cors_allowed_origins">Allowed Origins</label></th>
+                                <td>
+                                    <textarea name="cors_allowed_origins" id="cors_allowed_origins" class="large-text" rows="5"><?php echo esc_textarea($cors_allowed_origins); ?></textarea>
+                                    <p class="description">Enter one full origin URL per line (e.g., https://dev-console.vercel.app). This will be ignored if "Allow All Origins" is checked.</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                     <input type="hidden" name="dev_console_save_settings" value="1">
+                     <?php submit_button('Save CORS Settings'); ?>
+                </form>
+            </div>
+
+
+            <div class="dc-card dc-card-danger">
+                <h2>Regenerate Access Key</h2>
+                <p>If you suspect your key has been compromised, regenerate it. This will immediately disconnect any currently connected applications.</p>
+                <form method="post" action="">
+                    <?php wp_nonce_field('dev_console_regenerate_key_nonce'); ?>
+                    <input type="hidden" name="dev_console_regenerate_key" value="1">
+                    <button type="submit" class="button button-primary" onclick="return confirm('Are you sure you want to regenerate the access key? This will break the existing connection.');">Regenerate Key</button>
                 </form>
             </div>
              <p class="dc-footer">Dev-Console Connector Version <?php echo esc_html($this->get_plugin_version()); ?></p>
         </div>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
+                // Show/Hide Button
+                const keyInput = document.getElementById('access_key');
+                const showHideBtn = document.querySelector('.dc-show-hide-btn');
+                if (keyInput && showHideBtn) {
+                    showHideBtn.addEventListener('click', function() {
+                        if (keyInput.type === 'password') {
+                            keyInput.type = 'text';
+                            showHideBtn.textContent = 'Hide';
+                        } else {
+                            keyInput.type = 'password';
+                            showHideBtn.textContent = 'Show';
+                        }
+                    });
+                }
+
+                // Clipboard.js
                 if(typeof ClipboardJS === 'undefined') {
                     var script = document.createElement('script');
                     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js';
-                    script.onload = function() {
-                        initializeClipboard();
-                    };
+                    script.onload = function() { initializeClipboard(); };
                     document.head.appendChild(script);
                 } else {
                     initializeClipboard();
@@ -147,11 +201,9 @@ final class Dev_Console_Connector {
                 function initializeClipboard() {
                     var clipboard = new ClipboardJS('.dc-copy-btn');
                     clipboard.on('success', function(e) {
-                        var originalText = e.trigger.innerHTML;
-                        e.trigger.innerHTML = 'Copied!';
-                        setTimeout(function() {
-                            e.trigger.innerHTML = originalText;
-                        }, 2000);
+                        var originalText = e.trigger.textContent;
+                        e.trigger.textContent = 'Copied!';
+                        setTimeout(function() { e.trigger.textContent = 'Copy'; }, 2000);
                         e.clearSelection();
                     });
                 }
@@ -165,24 +217,55 @@ final class Dev_Console_Connector {
      */
     public function register_rest_routes() {
         register_rest_route('dev-console/v1', '/execute', [
-            'methods'  => WP_REST_Server::CREATABLE,
+            'methods'  => 'POST, OPTIONS',
             'callback' => [$this, 'handle_rest_request'],
             'permission_callback' => '__return_true' // We handle permissions manually.
         ]);
+    }
+    
+    private function handle_cors() {
+        if (!isset($_SERVER['HTTP_ORIGIN'])) {
+            return;
+        }
+
+        $origin = $_SERVER['HTTP_ORIGIN'];
+        $allowed_origin = '';
+        
+        if (get_option(self::CORS_ALLOW_ALL_OPTION, '0') === '1') {
+            $allowed_origin = '*';
+        } else {
+            $allowed_origins_raw = get_option(self::CORS_ALLOWED_ORIGINS_OPTION, '');
+            $allowed_origins = array_filter(array_map('trim', explode("\n", $allowed_origins_raw)));
+            if (in_array($origin, $allowed_origins)) {
+                $allowed_origin = $origin;
+            }
+        }
+        
+        if ($allowed_origin) {
+            header('Access-Control-Allow-Origin: ' . $allowed_origin);
+            header('Access-Control-Allow-Methods: POST, OPTIONS');
+            header('Access-Control-Allow-Headers: Content-Type, X-Access-Key');
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            exit(0);
+        }
+        
+        if (!$allowed_origin) {
+            wp_send_json_error('CORS: Origin not allowed.', 403);
+        }
     }
     
     /**
      * Authenticates the incoming REST request.
      */
     private function authenticate_request($request) {
-        $connector_key = $request->get_header('X-Connector-Key');
-        $api_key = $request->get_header('X-Api-Key');
-
-        if (!$connector_key || !$api_key) {
-            return new WP_Error('auth_failed', 'Missing authentication headers.', ['status' => 401]);
+        $access_key = $request->get_header('X-Access-Key');
+        if (!$access_key) {
+            return new WP_Error('auth_failed', 'Missing X-Access-Key header.', ['status' => 401]);
         }
-        if (!hash_equals(get_option(self::CONNECTOR_KEY_OPTION), $connector_key) || !hash_equals(get_option(self::API_KEY_OPTION), $api_key)) {
-            return new WP_Error('auth_failed', 'Invalid authentication keys.', ['status' => 403]);
+        if (!hash_equals(get_option(self::ACCESS_KEY_OPTION), $access_key)) {
+            return new WP_Error('auth_failed', 'Invalid Access Key.', ['status' => 403]);
         }
         return true;
     }
@@ -191,6 +274,8 @@ final class Dev_Console_Connector {
      * Main handler for all incoming REST requests.
      */
     public function handle_rest_request(WP_REST_Request $request) {
+        $this->handle_cors();
+        
         $auth = $this->authenticate_request($request);
         if (is_wp_error($auth)) {
             return $auth;
@@ -213,7 +298,7 @@ final class Dev_Console_Connector {
         return new WP_REST_Response(['success' => false, 'message' => 'Invalid action specified.'], 400);
     }
     
-    // --- START: Action Methods ---
+    // --- START: Action Methods (No changes below this line, only helper methods at the end) ---
     
     private function _action_ping($payload) {
         return ['message' => 'pong', 'connector_version' => $this->get_plugin_version()];
@@ -636,7 +721,7 @@ final class Dev_Console_Connector {
         .dev-console-wrap .dc-key-field label { font-weight: bold; display: block; margin-bottom: 5px; }
         .dev-console-wrap .dc-input-group { display: flex; }
         .dev-console-wrap .dc-input-group input { flex-grow: 1; font-family: monospace; }
-        .dev-console-wrap .dc-copy-btn { margin-left: 5px; }
+        .dev-console-wrap .dc-copy-btn, .dev-console-wrap .dc-show-hide-btn { margin-left: 5px; }
         .dev-console-wrap .dc-card-danger { border-left: 4px solid #d63638; }
         .dev-console-wrap .dc-footer { margin-top: 20px; color: #777; font-size: 12px; }
         ";
