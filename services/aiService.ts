@@ -5,6 +5,7 @@ import * as openAiService from './openAiService';
 import * as claudeService from './claudeService';
 import * as groqService from './groqService';
 import * as perplexityService from './perplexityService';
+import * as localLlmService from './localLlmService'; // Import the new local LLM service
 
 let genAI: GoogleGenAI | null = null;
 let lastUsedApiKey: string | undefined = undefined;
@@ -28,6 +29,17 @@ const initializeGenAI = () => {
     return genAI;
 };
 
+// ADD: New function to generate with Local LLM
+const generateWithLocal = async (prompt: string, model?: string) => {
+    const settings = getSecureItem<AppSettings>('appSettings') || {};
+    const endpoint = settings.localLlmEndpoint;
+    if (!endpoint) {
+        throw new Error("Local LLM endpoint is not configured in Settings.");
+    }
+    // Pass endpoint and model to the localLlmService
+    return localLlmService.generateText(prompt, endpoint, model);
+};
+
 
 export const isAiConfigured = (): boolean => {
     const settings = getSecureItem<AppSettings>('appSettings');
@@ -38,6 +50,7 @@ export const isAiConfigured = (): boolean => {
         claude: settings?.claudeApiKey,
         groq: settings?.groqApiKey,
         perplexity: settings?.perplexityApiKey,
+        local: settings?.localLlmEndpoint, // Check for local LLM endpoint
     };
     return !!keyMap[provider];
 };
@@ -65,6 +78,7 @@ const providerMap: Record<AiProvider, (prompt: string, model?: string) => Promis
     claude: claudeService.generateText,
     groq: groqService.generateText,
     perplexity: perplexityService.generateText,
+    local: generateWithLocal, // Add local LLM to the map
 };
 
 const getModelForProvider = (provider: AiProvider, settings: AppSettings): string | undefined => {
@@ -74,6 +88,7 @@ const getModelForProvider = (provider: AiProvider, settings: AppSettings): strin
         claude: settings.claudeModel,
         groq: settings.groqModel,
         perplexity: settings.perplexityModel,
+        local: settings.localLlmModel, // Get local LLM model
     };
     return modelMap[provider];
 };
@@ -96,6 +111,7 @@ const generateTextWithProvider = async (prompt: string, options: { usePowerModel
             claude: 'claude-3-haiku-20240307',
             groq: 'llama3-8b-8192',
             perplexity: 'llama-3-sonar-small-32k-online',
+            local: settings.localLlmModel, // For local, use the configured model as credit saver doesn't apply the same way
         };
         model = cheapModelMap[provider] || getModelForProvider(provider, settings);
     } else {

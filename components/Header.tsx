@@ -6,7 +6,6 @@ import { View } from '../App';
 import { SiteData } from '../types';
 
 interface HeaderProps {
-    sites: SiteData[];
     currentSite: SiteData | null;
     onOpenSiteSwitcher: () => void;
     onRefresh: () => Promise<void>;
@@ -35,7 +34,7 @@ const SiteIcon: React.FC<{ site: SiteData | null }> = ({ site }) => {
 };
 
 
-const Header: React.FC<HeaderProps> = ({ sites, currentSite, onOpenSiteSwitcher, onRefresh, onTestConnection, displayName, profilePictureUrl, onLogout, setView }) => {
+const Header: React.FC<HeaderProps> = ({ currentSite, onOpenSiteSwitcher, onRefresh, onTestConnection, displayName, profilePictureUrl, onLogout, setView }) => {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 

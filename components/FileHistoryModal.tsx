@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Asset, AssetFile, SiteData, BackupFile, AssetType } from '../types';
+import { Asset, AssetFile, SiteData, BackupFile } from '../types';
 import { getFileHistory, readFileContent, restoreFile } from '../services/wordpressService';
 import { CloseIcon, HistoryIcon } from './icons/Icons';
 

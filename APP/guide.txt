@@ -1,0 +1,63 @@
+# Dev-Console Desktop Application Build Guide
+
+This guide details how to build the Dev-Console application into cross-platform desktop executables using Tauri.
+
+**Important Note:** Building desktop applications with Tauri requires the Rust programming language toolchain to be installed on your system. If you haven't already, please install Rust by following the official instructions: [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+After installation, please restart your terminal or command prompt.
+
+## Prerequisites
+
+*   [Node.js](https://nodejs.org/) (v16 or higher)
+*   [npm](https://www.npmjs.com/)
+*   [Rust](https://www.rust-lang.org/tools/install) and its `cargo` package manager.
+*   Required system dependencies for your target platform (e.g., WebView2 for Windows, Xcode for macOS, `webkit2gtk-4.0` for Linux). Refer to the Tauri documentation for details: [https://tauri.app/v1/guides/getting-started/prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites)
+
+## Build Instructions
+
+Follow these steps from the root directory of your Dev-Console project:
+
+1.  **Install Node.js dependencies:**
+    ```bash
+    npm install
+    ```
+
+2.  **Install Tauri CLI (if not already installed):**
+    ```bash
+    npm install @tauri-apps/cli -D
+    ```
+
+3.  **Build the application:**
+    This command will first build the frontend (using `npm run build`), then compile the Rust backend, and package it into a desktop application installer for your current operating system.
+
+    ```bash
+    npx tauri build
+    ```
+
+### Output Directories
+
+Tauri will place the generated executable and installers in the `src-tauri/target/release` (or `src-tauri/target/debug` for development builds) directory, organized by platform.
+
+For example:
+*   **Windows:** `src-tauri/target/release/bundle/msi/` (contains `.msi` installer)
+*   **macOS:** `src-tauri/target/release/bundle/dmg/` (contains `.dmg` installer)
+*   **Linux:** `src-tauri/target/release/bundle/deb/` (contains `.deb` package)
+
+You can find the direct executables within subdirectories like `src-tauri/target/release/dev-console.exe` (Windows) or `src-tauri/target/release/Dev-Console.app` (macOS).
+
+### Running in Development Mode (with hot-reloading)
+
+To run the desktop application in development mode, which includes hot-reloading for frontend changes:
+
+```bash
+npm run tauri dev
+```
+
+This will launch the Tauri application, running your frontend code within its webview.
+
+---
+
+**Note on Mobile Applications (iOS/Android):**
+Tauri primarily targets desktop platforms. For mobile devices, the Dev-Console is available as a Progressive Web App (PWA). You can "Add to Home Screen" on most modern mobile browsers to get an app-like experience with offline capabilities.
+
+**Note on macOS UI Customization (SwiftUI, Transparent Sidebar):**
+Achieving native macOS UI elements like a truly transparent sidebar or integrating SwiftUI components directly into the Tauri application requires advanced Rust and native macOS development. This typically involves using the Tauri plugin system or creating custom commands and UI overlays with platform-specific code. This guide focuses on standard Tauri builds.

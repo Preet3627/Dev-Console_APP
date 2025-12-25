@@ -4,6 +4,7 @@ import { SendIcon, GeminiIcon } from './icons/Icons';
 import { createChatSession, isAiConfigured } from '../services/aiService';
 import { executeTool } from '../services/toolExecutor';
 import ActionConfirmationModal from './ActionConfirmationModal';
+import ThinkingAnimation from './ThinkingAnimation';
 
 interface CoPilotViewProps {
     siteData: SiteData | null;
@@ -20,6 +21,30 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData, displayName, profil
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [pendingAction, setPendingAction] = useState<any | null>(null);
+
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(-1);
+
+    const commonCommands = [
+        "list plugins",
+        "list themes",
+        "read file",
+        "write file",
+        "delete plugin",
+        "delete theme",
+        "install plugin",
+        "install theme",
+        "toggle plugin status",
+        "toggle theme status",
+        "get database tables",
+        "query database",
+        "generate plugin",
+        "generate theme",
+        "analyze log",
+        "analyze page speed",
+        "help",
+    ];
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -144,6 +169,35 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData, displayName, profil
         if (e.key === 'Enter' && e.ctrlKey) {
             e.preventDefault();
             handleSend();
+        } else if (e.key === 'Tab' && showSuggestions && highlightedSuggestionIndex !== -1) {
+            e.preventDefault();
+            setInput(suggestions[highlightedSuggestionIndex]);
+            setShowSuggestions(false);
+        } else if (e.key === 'ArrowUp' && showSuggestions) {
+            e.preventDefault();
+            setHighlightedSuggestionIndex(prev => (prev === 0 ? suggestions.length - 1 : prev - 1));
+        } else if (e.key === 'ArrowDown' && showSuggestions) {
+            e.preventDefault();
+            setHighlightedSuggestionIndex(prev => (prev === suggestions.length - 1 ? 0 : prev + 1));
+        } else if (e.key === 'Escape') {
+            setShowSuggestions(false);
+        }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        setInput(value);
+
+        if (value.length > 2) { // Start suggesting after 2 characters
+            const filtered = commonCommands.filter(cmd => 
+                cmd.toLowerCase().startsWith(value.toLowerCase())
+            );
+            setSuggestions(filtered);
+            setShowSuggestions(filtered.length > 0);
+            setHighlightedSuggestionIndex(0);
+        } else {
+            setShowSuggestions(false);
+            setSuggestions([]);
         }
     };
 
@@ -152,7 +206,28 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData, displayName, profil
             return <React.Fragment key={index}>{part.text.split('\n').map((line, i, arr) => <React.Fragment key={i}>{line}{i < arr.length - 1 && <br />}</React.Fragment>)}</React.Fragment>;
         }
         if ('functionCall' in part) {
-            return <div key={index} className="text-accent-yellow font-mono text-xs">Waiting for confirmation to run: {part.functionCall.name}</div>;
+            return (
+                <div key={index} className="bg-blue-900/30 p-2 rounded-md my-2 text-xs font-mono">
+                    <p className="text-accent-blue font-bold mb-1">Co-Pilot Action Proposed:</p>
+                    <pre className="whitespace-pre-wrap break-all text-text-primary">
+                        <code className="language-json">
+                            {JSON.stringify(part.functionCall, null, 2)}
+                        </code>
+                    </pre>
+                </div>
+            );
+        }
+        if ('functionResponse' in part) {
+            return (
+                <div key={index} className="bg-green-900/30 p-2 rounded-md my-2 text-xs font-mono">
+                    <p className="text-accent-green font-bold mb-1">Output from `{part.functionResponse.name}`:</p>
+                    <pre className="whitespace-pre-wrap break-all text-text-primary">
+                        <code className="language-json">
+                            {JSON.stringify(part.functionResponse.response, null, 2)}
+                        </code>
+                    </pre>
+                </div>
+            );
         }
         return null;
     };
@@ -182,23 +257,38 @@ const CoPilotView: React.FC<CoPilotViewProps> = ({ siteData, displayName, profil
                             </div>
                         </div>
                     ))}
-                    {isLoading && (
-                        <div className="flex items-start gap-4">
-                            <GeminiIcon className="w-10 h-10 p-1 rounded-full flex-shrink-0 mt-1 bg-background animate-pulse" />
-                            <div className="chat-bubble chat-bubble-model">
-                                <div className="text-text-secondary animate-pulse">Co-Pilot is thinking...</div>
-                            </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
+                                         {isLoading && (
+                                            <div className="flex items-start gap-4">
+                                                <GeminiIcon className="w-10 h-10 p-1 rounded-full flex-shrink-0 mt-1 bg-background animate-pulse" />
+                                                <div className="chat-bubble chat-bubble-model">
+                                                    <ThinkingAnimation className="text-text-secondary" />
+                                                </div>
+                                            </div>
+                                        )}                    <div ref={messagesEndRef} />
                 </main>
                 {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm font-mono mx-auto w-full max-w-4xl">{error}</div>}
-                <footer className="mt-4 mx-auto w-full max-w-4xl">
+                <footer className="mt-4 mx-auto w-full max-w-4xl relative">
+                    {showSuggestions && suggestions.length > 0 && (
+                        <ul className="absolute bottom-full left-0 right-0 bg-background-secondary border border-border-primary rounded-lg mb-2 overflow-hidden shadow-lg z-10 max-h-48 overflow-y-auto">
+                            {suggestions.map((suggestion, index) => (
+                                <li 
+                                    key={suggestion} 
+                                    className={`p-2 cursor-pointer hover:bg-border-primary ${highlightedSuggestionIndex === index ? 'bg-border-primary' : ''}`}
+                                    onClick={() => {
+                                        setInput(suggestion);
+                                        setShowSuggestions(false);
+                                    }}
+                                >
+                                    {suggestion}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                     <div className="flex items-center space-x-2 bg-background p-2 border border-border-primary rounded-lg">
                         <textarea
                             ref={textareaRef}
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            onChange={handleInputChange}
                             onKeyDown={handleKeyDown}
                             placeholder={isAiConfigured() ? "Ask a question... (Ctrl+Enter to send)" : "Please configure your API Key in Settings"}
                             rows={1}

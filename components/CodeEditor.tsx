@@ -41,7 +41,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
     const [isFullScreen, setIsFullScreen] = useState(false);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const preRef = useRef<HTMLElement>(null);
+    const preRef = useRef<HTMLPreElement>(null);
     const codeRef = useRef<HTMLElement>(null);
 
     const modalStyle = modalBgColor ? { backgroundColor: modalBgColor } : {};
@@ -144,12 +144,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
                 
                 {error && <div className="text-center my-2 p-3 bg-accent-red/10 border border-accent-red/30 rounded-md text-sm text-accent-red/80">{error}</div>}
 
-                <div className="flex-grow min-h-0 flex space-x-4">
-                    <div className="w-1/4 bg-background border border-border-primary rounded-md">
-                        {isLoading ? <div className="p-4">Loading files...</div> : <FileTree files={files} selectedFile={selectedFile} onSelectFile={handleSelectFile} />}
+                <div className="flex-grow min-h-0 flex space-x-4 p-2 bg-background-light rounded-md border border-border-primary"> {/* Added padding, background, and border */}
+                    <div className="w-1/4 bg-background border border-border-secondary rounded-md overflow-hidden"> {/* Adjusted border */}
+                        {isLoading ? <div className="p-4 text-text-secondary">Loading files...</div> : <FileTree files={files} selectedFile={selectedFile} onSelectFile={handleSelectFile} />}
                     </div>
                     <div className="w-3/4 flex flex-col">
-                        <div className="flex-grow relative code-editor-wrapper">
+                        <div className="flex-grow relative code-editor-wrapper rounded-md overflow-hidden border border-border-secondary"> {/* Added border and overflow hidden */}
                              <textarea
                                 ref={textareaRef}
                                 value={fileContent}
@@ -166,12 +166,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
                                 </code>
                             </pre>
                         </div>
-                        <div className="flex justify-between items-center mt-4">
+                        <div className="flex justify-between items-center mt-4 p-2 bg-background-light rounded-md border border-border-primary"> {/* Added padding, background, and border */}
                             <div>
                                 {selectedFile && (
                                     <button
                                         onClick={() => setShowHistory(true)}
-                                        className="flex items-center space-x-2 px-3 py-2 text-sm bg-background hover:bg-border-primary rounded-md"
+                                        className="flex items-center space-x-2 px-3 py-2 text-sm bg-background hover:bg-border-primary rounded-md text-text-secondary hover:text-text-primary"
                                     >
                                         <HistoryIcon className="w-4 h-4" />
                                         <span>Restore Points</span>
@@ -179,7 +179,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ siteData, asset, initialFile, o
                                 )}
                             </div>
                             <div className="flex items-center space-x-4">
-                               <span className={`text-sm ${isDirty ? 'text-accent-yellow' : 'text-text-secondary'}`}>
+                               <span className={`text-sm font-semibold ${isDirty ? 'text-accent-yellow pulse-animation' : 'text-text-secondary'}`}> {/* Added font-semibold and pulse-animation */}
                                    {selectedFile ? (isDirty ? 'Unsaved changes' : 'Saved') : 'No file selected'}
                                </span>
                                 <button 

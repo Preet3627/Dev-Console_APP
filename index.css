@@ -254,6 +254,12 @@ kbd {
   from { transform: translateX(0); opacity: 1; }
   to { transform: translateX(100%); opacity: 0; }
 }
+/* ADD: Keyframes for a subtle pulse highlight animation */
+@keyframes pulse-highlight {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.03); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
 /* FIX: Add keyframes for the auto-execute glow effect. */
 @keyframes pulse-glow {
     0%, 100% { box-shadow: 0 0 3px #a78bfa, 0 0 5px #22d3ee; }
@@ -321,6 +327,10 @@ kbd {
 .animate-staggered-list-item {
     opacity: 0;
     animation: staggered-list-fade-in 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+/* ADD: Class for the pulse-highlight animation */
+.pulse-animation {
+  animation: pulse-highlight 1.5s infinite ease-in-out;
 }
 
 

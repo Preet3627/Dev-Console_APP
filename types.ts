@@ -5,7 +5,7 @@ export interface SiteData {
     accessKey: string;
 }
 
-export type AiProvider = 'gemini' | 'openai' | 'claude' | 'groq' | 'perplexity';
+export type AiProvider = 'gemini' | 'openai' | 'claude' | 'groq' | 'perplexity' | 'local';
 
 export interface NextcloudSettings {
     serverUrl?: string;
@@ -36,6 +36,8 @@ export interface AppSettings {
     claudeModel?: string;
     groqModel?: string;
     perplexityModel?: string;
+    localLlmEndpoint?: string; // New: Endpoint for local LLM (e.g., http://localhost:11434)
+    localLlmModel?: string; // New: Model name for local LLM (e.g., "llama2")
     
     // Cloud Storage Settings
     nextcloud?: NextcloudSettings;

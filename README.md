@@ -1,148 +1,69 @@
-# Dev-Console
-If You dont want to setup From scratch Here is THE ONline Solution https://dev.ponsrischool.in
-An advanced local WordPress management system that uses AI to generate, edit, and troubleshoot plugins and themes, and syncs changes directly to a live WordPress site via a connector plugin.
+# Dev-Console: AI-Powered WordPress Management Suite
+
+**Live Demo:** [dev.ponsrischool.in](https://dev.ponsrischool.in) | **GitHub Repository:** [https://github.com/Preet3627/Dev-Console_APP](https://github.com/Preet3627/Dev-Console_APP)
+
+Dev-Console is an advanced, AI-powered suite that streamlines how you build, debug, and manage WordPress sites. It combines a powerful AI assistant with a comprehensive set of development tools to help you go from concept to deployment faster than ever before.
 
 ## ✨ Features
 
--   **AI-Powered Generation**: Create complete WordPress plugins and themes from a simple text description using Google's Gemini AI.
--   **Co-Pilot Chat**: An integrated AI assistant to help you manage your site, troubleshoot issues, and perform actions using natural language.
--   **Full Site Management**:
-    -   **Asset Manager**: Activate, deactivate, and delete plugins and themes.
-    -   **File Manager**: Browse and edit files in your WordPress root directory.
-    -   **Database Manager**: View database tables and run safe, AI-assisted queries.
--   **Advanced Code Editor**:
-    -   Edit plugin and theme files directly within the app.
-    -   Automatic file backups on save.
-    -   Restore files to previous versions.
--   **Diagnostics & Optimization**:
-    -   **Security Scanner**: Check for common WordPress vulnerabilities.
-    -   **Performance Optimizer**: Run Google PageSpeed audits and get AI-powered recommendations.
-    -   **Debug Log Viewer**: View your `debug.log` and get AI analysis on errors.
--   **Backup & Restore**: Create backups of your `wp-content` directory and download them or upload them to cloud storage (Nextcloud, Google Drive).
--   **Secure Multi-User System**: Supports multiple users with a robust authentication system and an admin panel for user management.
-
-## 🛠️ Tech Stack
-
--   **Frontend**: React, TypeScript, Vite, Tailwind CSS
--   **Backend**: Node.js, Express.js
--   **Database**: MySQL
--   **AI**: Google Gemini API (pluggable with other providers)
--   **Authentication**: JWT (JSON Web Tokens), Google OAuth
-
-## 📋 Prerequisites
-
-Before you begin, ensure you have the following installed on your local machine:
-
--   [Node.js](https://nodejs.org/) (version 18 or newer)
--   A running [MySQL](https://www.mysql.com/) server (e.g., via XAMPP, MAMP, Docker).
+- **AI Co-Pilot:** An intelligent assistant that can generate code, manage your site, troubleshoot errors, and execute complex tasks using natural language.
+- **Multi-Provider AI Support:** Switch between different AI providers, including Google Gemini, OpenAI, Claude, Groq, Perplexity, and even a local LLM.
+- **Progressive Web App (PWA):** The application is a fully offline-capable PWA, allowing you to use it even without an internet connection.
+- **Enhanced Code Editor:** A polished code editor with syntax highlighting, file history, and a more robust layout.
+- **On-Device AI (Autocomplete):** The Co-Pilot chat now features a basic on-device autocomplete for common commands, accessible with the Tab key.
+- **Secure & Multi-User:** Built with security in mind, featuring JWT authentication, Google Sign-In, and an admin panel for user management.
+- **Unified Management:** A single, elegant dashboard to manage plugins, themes, and core files.
+- **Safe Database Interaction:** Browse database tables and use the AI assistant to query data with safe, pre-defined commands.
+- **Diagnostics & Optimization:** Run Google PageSpeed audits, scan for security vulnerabilities, and get AI analysis on your debug logs.
 
 ## 🚀 Getting Started
 
-Follow these steps to get the Dev-Console running locally.
+### Prerequisites
 
-### 1. Clone the Repository
+- [Node.js](https://nodejs.org/) (v16 or higher)
+- [npm](https://www.npmjs.com/)
+- A MySQL-compatible database
 
-```bash
-git clone https://github.com/your-username/dev-console.git
-cd dev-console
-```
+### Installation
 
-### 2. Install Dependencies
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/Preet3627/Dev-Console_APP.git
+    cd Dev-Console_APP
+    ```
 
-This will install all the necessary packages for both the frontend and backend.
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
 
-```bash
-npm install
-```
+3.  **Set up environment variables:**
+    - Create a `.env` file in the root of the project by copying `.env.example`.
+    - Fill in the required environment variables, especially for your database and JWT secret.
 
-### 3. Configure Environment Variables
+4.  **Run the application:**
+    ```bash
+    npm run dev
+    ```
+    This will start the Vite frontend and the Node.js backend concurrently. You can access the application at `http://localhost:5173`.
 
-The backend server requires a `.env` file for configuration.
+## 🖥️ Desktop Application (Tauri)
 
-1.  Create a new file named `.env` in the root of the project.
-2.  Copy the template from the "Backend Setup Required" screen (or the template below) into it.
-3.  Fill in the required values, especially your database credentials and a strong `JWT_SECRET`.
+The project is set up to be packaged as a cross-platform desktop application using Tauri.
 
-#### `.env` Template
+**Note:** The build process for the desktop application is currently blocked because it requires the Rust toolchain (including `cargo`) to be installed on your system.
 
-```env
-# Database Configuration (replace with your values)
-DB_HOST=127.0.0.1
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_DATABASE=dev_console
-
-# Application Secrets (IMPORTANT: Use strong, random values)
-JWT_SECRET=generate_a_strong_random_secret_here
-GOOGLE_CLIENT_ID=your_google_oauth_client_id.apps.googleusercontent.com
-
-# Optional: Default Admin User (for first-time setup)
-ADMIN_EMAIL=admin@yourdomain.com
-ADMIN_PASSWORD=a_strong_and_secure_password
-
-# Optional: SMTP Email Configuration (for user verification emails)
-SMTP_HOST=your_smtp_host
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your_smtp_username
-SMTP_PASS=your_smtp_password
-SMTP_FROM="Dev-Console" # The "From" name in emails. The email address will be your SMTP_USER.
-```
-
-**Note:** The server will automatically create the database (`dev_console`) and seed the initial admin user if they don't exist on the first run.
-
-### 4. Run the Development Server
-
-This command starts both the Vite frontend and the Node.js backend concurrently.
+Once you have installed Rust from [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install), you can build the application with:
 
 ```bash
-npm run dev
+npx tauri build
 ```
 
-### 5. Open the Application
+This will generate executables for your platform in the `src-tauri/target/release` directory.
 
-Once the servers are running, open your browser and navigate to:
+## 🤝 Contributing
 
-**[http://localhost:5173](http://localhost:5173)**
+This is an open-source project. Contributions are welcome! Please feel free to open an issue or submit a pull request on the [GitHub repository](https://github.com/Preet3627/Dev-Console_APP).
 
-You should see the login screen. You can log in with the admin credentials you set in the `.env` file or create a new account.
-
-## 🌐 Production Deployment (Vercel - Recommended)
-
-This project is pre-configured for easy deployment on [Vercel](https://vercel.com/), a modern platform designed for full-stack applications like this one.
-
-### 1. Push to GitHub
-
-Make sure your project code is in a GitHub repository.
-
-### 2. Import Project on Vercel
-
-1.  Sign up for a Vercel account and connect it to your GitHub.
-2.  From your Vercel dashboard, click "Add New... -> Project".
-3.  Select your GitHub repository. Vercel will automatically detect that it is a Vite project.
-
-### 3. Add Environment Variables
-
-This is the most important step. Vercel needs access to the same secrets as your local `.env` file.
-
-1.  In your new Vercel project's settings, go to the **Environment Variables** section.
-2.  Add all the variables from your `.env` file (e.g., `DB_HOST`, `DB_PASSWORD`, `JWT_SECRET`, `GOOGLE_CLIENT_ID`, etc.). **You must use your production database credentials here.**
-3.  Save the variables.
-
-### 4. Deploy
-
-Click the **Deploy** button. Vercel will handle the rest. It will:
--   Build your React frontend and deploy it to a global CDN.
--   Deploy your `backend/index.js` Express server as a Serverless Function.
--   Use the `vercel.json` file in this repository to automatically route API requests from the frontend to the backend.
-
-Your application will be live at the URL Vercel provides.
-
-## 🔗 WordPress Connector Plugin
-
-To connect the Dev-Console to a WordPress site, you must install the `dev-console-connector` plugin on that site.
-
-1.  Log into the Dev-Console application.
-2.  Click the "Connect" button in the header.
-3.  Follow the instructions in the modal to download the plugin and install it on your WordPress site.
-4.  Once activated, navigate to **Settings &rarr; Connector** in your WordPress admin dashboard menu to find the **Connector Key** and **API Key** required to complete the connection.
+---
+*This README was generated by an AI assistant.*

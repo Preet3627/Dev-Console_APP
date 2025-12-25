@@ -1,5 +1,3 @@
-
-
 import React, { useEffect } from 'react';
 import { PM_SHRI_Logo, GenerateIcon, CoPilotIcon, ShieldIcon, SpeedIcon, FileIcon, DatabaseIcon } from './icons/Icons';
 
@@ -186,7 +184,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                         </div>
                     </div>
                 </section>
-
+                        
+                <section id="open-source" className="py-20 lg:py-32 bg-background-light">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                        <h2 className="animate-on-scroll fade-in-up text-4xl md:text-5xl font-bold mb-6">Open Source, Community Driven</h2>
+                        <p className="animate-on-scroll fade-in-up text-lg text-text-secondary max-w-3xl mx-auto mb-10" style={{ animationDelay: '0.1s' }}>
+                            Dev-Console is built on open-source principles, fostering transparency, collaboration, and continuous improvement. Join our community on GitHub to contribute, report issues, or suggest new features!
+                        </p>
+                        <div className="animate-on-scroll fade-in-up" style={{ animationDelay: '0.2s' }}>
+                            <a href="https://github.com/Preet3627/Dev-Console_APP" target="_blank" rel="noopener noreferrer" className="btn-primary-landing !px-8 !py-4 !text-lg">
+                                View on GitHub
+                            </a>
+                        </div>
+                    </div>
+                </section>
+                
                 <section id="ai-demo" className="py-20 lg:py-32">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="grid grid-cols-1 lg:grid-cols-2 lg:items-center gap-12">
@@ -201,6 +213,58 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                                 <pre><code className="language-php">{sampleCode}</code></pre>
                             </div>
                         </div>
+                    </div>
+                </section>
+                
+                <section id="faq" className="py-20 lg:py-32">
+                    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="text-center max-w-2xl mx-auto mb-12">
+                            <h2 className="animate-on-scroll fade-in-up text-4xl md:text-5xl font-bold mb-6">Frequently Asked Questions</h2>
+                            <p className="animate-on-scroll fade-in-up text-lg text-text-secondary" style={{ animationDelay: '0.1s' }}>
+                                Got questions? We've got answers. If you don't find what you're looking for, feel free to reach out on GitHub.
+                            </p>
+                        </div>
+                        <div className="space-y-6">
+                            {[
+                                {
+                                    q: "What is Dev-Console?",
+                                    a: "Dev-Console is an advanced, AI-powered suite designed to streamline WordPress development and management. It helps you generate code, manage files, optimize performance, and much more, all from a single interface."
+                                },
+                                {
+                                    q: "Is Dev-Console free to use?",
+                                    a: "Yes, Dev-Console is an open-source project. You can use, modify, and distribute it freely. Contributions are welcome!"
+                                },
+                                {
+                                    q: "How does the AI work?",
+                                    a: "The AI assistant integrates with various large language models to understand your requests and execute tasks. It can generate code, troubleshoot issues, analyze logs, and interact with your WordPress site securely."
+                                },
+                                {
+                                    q: "What kind of WordPress sites can I manage?",
+                                    a: "Dev-Console is designed to manage any WordPress site, whether it's local development or a live production site, through a secure connector plugin."
+                                },
+                                {
+                                    q: "Is my data safe with Dev-Console?",
+                                    a: "Security is a top priority. Dev-Console uses secure authentication methods like JWT and Google Sign-In, and all interactions with your WordPress site are handled via a robust, secure connector."
+                                }
+                            ].map((item, index) => (
+                                <div key={index} className="animate-on-scroll fade-in-up glass-card-landing p-6" style={{ animationDelay: `${(index * 0.1) + 0.1}s` }}>
+                                    <h3 className="font-semibold text-xl mb-2">{item.q}</h3>
+                                    <p className="text-text-secondary">{item.a}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+                
+                 <section className="py-20 lg:py-32 bg-gradient-to-r from-accent-blue-dark to-accent-violet-dark text-white text-center">
+                    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <h2 className="animate-on-scroll fade-in-up text-4xl md:text-5xl font-bold mb-6">Ready to Transform Your Workflow?</h2>
+                        <p className="animate-on-scroll fade-in-up text-lg md:text-xl mb-10 opacity-90" style={{ animationDelay: '0.1s' }}>
+                            Join the growing community of WordPress developers who are building smarter, faster, and with more confidence.
+                        </p>
+                        <button onClick={onEnterApp} className="animate-on-scroll fade-in-up btn-cta-landing !px-10 !py-5 !text-xl" style={{ animationDelay: '0.2s' }}>
+                            Launch Dev-Console Now
+                        </button>
                     </div>
                 </section>
                 

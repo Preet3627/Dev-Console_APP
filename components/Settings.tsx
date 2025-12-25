@@ -280,6 +280,13 @@ const Settings: React.FC<SettingsProps> = ({ onDisconnect, siteData, onProfileUp
                         </div>
                         <hr className="border-border"/>
                         <div>
+                            <label className="block text-sm font-medium text-text-primary">Local LLM Endpoint</label>
+                            <input type="text" name="localLlmEndpoint" value={settings.localLlmEndpoint || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="e.g., http://localhost:11434" />
+                             <label className="block text-xs font-medium text-text-secondary mt-2">Local LLM Model Name</label>
+                            <input type="text" name="localLlmModel" value={settings.localLlmModel || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="e.g., llama2, mistral" />
+                        </div>
+                        <hr className="border-border"/>
+                        <div>
                             <label className="block text-sm font-medium text-text-primary">Google OAuth Client ID</label>
                             <input type={showKeys ? 'text' : 'password'} name="googleClientId" value={settings.googleClientId || ''} onChange={handleInputChange} className="input-field mt-1" placeholder="Required for Google Sign-In & Drive" />
                         </div>

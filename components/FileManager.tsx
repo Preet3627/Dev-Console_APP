@@ -145,7 +145,7 @@ const FileManager: React.FC<FileManagerProps> = ({ siteData, onEditFile }) => {
                                         </button>
                                     </li>
                                 )}
-                                {entries.map((entry, index) => (
+                                {entries.map((entry) => (
                                     <li 
                                         key={entry.path}
                                         className={`p-3 transition-colors ${selectedFile?.path === entry.path ? 'bg-accent-blue/20' : 'hover:bg-background'}`}

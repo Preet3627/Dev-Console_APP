@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Dashboard from './Dashboard';
@@ -31,57 +31,46 @@ import SiteSwitcherModal from './SiteSwitcherModal';
 import WelcomeWizard from './WelcomeWizard';
 import SeoManager from './SeoManager';
 
-
-import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';
+import { getSecureItem, setSecureItem } from './utils/secureLocalStorage';
 import { getAllSites, testConnection, getBackendStatus, getPublicConfig, getLatestConnectorPlugin, updateConnectorPlugin } from './services/wordpressService';
-import { SiteData, AppSettings, Asset, AssetFile, AssetType } from './types';
+import { SiteData, AppSettings, Asset, AssetFile, AssetType, View, AppStatus } from './types';
 import FloatingCoPilotButton from './components/FloatingCoPilotButton';
-
-// ADD: Added 'seo' and 'appSeo' to the View type for the new SEO features.
-export type View = 'dashboard' | 'plugins' | 'themes' | 'database' | 'generator' | 'scanner' | 'optimizer' | 'logs' | 'settings' | 'copilot' | 'fileManager' | 'backupRestore' | 'adminPanel' | 'backendStatus' | 'seo' | 'appSeo';
-type AuthView = 'login' | 'signup' | 'verify' | 'forgot_password';
-type Toast = { message: string; type: 'success' | 'error' };
-export type AppStatus = 'loading' | 'needs_setup' | 'setup_error' | 'ready';
-type AppView = 'landing' | 'main_app';
+import { useAppStore } from './store/appStore'; // Import the Zustand store
 
 const App: React.FC = () => {
-    const [currentAppView, setCurrentAppView] = useState<AppView>('landing');
-    const [authView, setAuthView] = useState<AuthView>('login');
-    const [verificationEmail, setVerificationEmail] = useState('');
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [currentView, setCurrentView] = useState<View>('dashboard');
-    
-    // Multi-site state
-    const [sites, setSites] = useState<SiteData[]>([]);
-    const [currentSite, setCurrentSite] = useState<SiteData | null>(null);
-    const [showSiteSwitcher, setShowSiteSwitcher] = useState(false);
-    
-    const [showConnectorModal, setShowConnectorModal] = useState(false);
-    const [showCoPilotModal, setShowCoPilotModal] = useState(false);
-    const [coPilotInitialPrompt, setCoPilotInitialPrompt] = useState<string | undefined>(undefined);
-    const [showEditor, setShowEditor] = useState(false);
-    const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
-    const [fileToEdit, setFileToEdit] = useState<AssetFile | null>(null);
-    const [showPluginGenerator, setShowPluginGenerator] = useState(false);
-    const [showThemeGenerator, setShowThemeGenerator] = useState(false);
-    const [modalBgColor, setModalBgColor] = useState('rgba(17, 24, 39, 0.5)'); // glass-bg
-    const [toast, setToast] = useState<Toast | null>(null);
-    const [appStatus, setAppStatus] = useState<AppStatus>('loading');
-    const [setupError, setSetupError] = useState('');
-
-    const [displayName, setDisplayName] = useState('');
-    const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
-
-    const [connectorVersion, setConnectorVersion] = useState<string | null>(null);
-    const [latestConnectorVersion, setLatestConnectorVersion] = useState<string | null>(null);
-    const [isCheckingVersions, setIsCheckingVersions] = useState(false);
-    const [isUpdating, setIsUpdating] = useState(false);
-    const [updateStatus, setUpdateStatus] = useState('');
-    
-    // ADD: State for the new Welcome Wizard.
-    const [showWelcomeWizard, setShowWelcomeWizard] = useState(false);
-
+    // Destructure state and actions from the Zustand store
+    const {
+        currentAppView, setCurrentAppView,
+        authView, setAuthView,
+        verificationEmail, setVerificationEmail,
+        isLoggedIn,
+        isAdmin,
+        currentView, setCurrentView,
+        sites, setSites,
+        currentSite, setCurrentSite,
+        showSiteSwitcher, setShowSiteSwitcher,
+        showConnectorModal, setShowConnectorModal,
+        showCoPilotModal, setShowCoPilotModal,
+        coPilotInitialPrompt, setCoPilotInitialPrompt,
+        showEditor, setShowEditor,
+        assetToEdit, setAssetToEdit,
+        fileToEdit, setFileToEdit,
+        showPluginGenerator, setShowPluginGenerator,
+        showThemeGenerator, setShowThemeGenerator,
+        modalBgColor,
+        toast, setToast,
+        appStatus, setAppStatus,
+        setupError, setSetupError,
+        displayName,
+        profilePictureUrl,
+        connectorVersion, setConnectorVersion,
+        latestConnectorVersion, setLatestConnectorVersion,
+        isCheckingVersions, setIsCheckingVersions,
+        isUpdating, setIsUpdating,
+        updateStatus, setUpdateStatus,
+        showWelcomeWizard, setShowWelcomeWizard,
+        handleLogin, handleLogout, loadAuthDataFromStorage, updateProfileData,
+    } = useAppStore();
 
     const checkBackendStatus = useCallback(async () => {
         setAppStatus('loading');
@@ -103,7 +92,7 @@ const App: React.FC = () => {
             setAppStatus('setup_error');
             setSetupError('A network error occurred while trying to reach the backend server. Is it running?');
         }
-    }, []);
+    }, [setAppStatus, setSetupError]);
 
     const loadInitialConfig = useCallback(async () => {
         try {
@@ -125,26 +114,26 @@ const App: React.FC = () => {
             }, 5000);
             return () => clearTimeout(timer);
         }
-    }, [toast]);
+    }, [toast, setToast]);
     
     // Site Switcher keyboard shortcut
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.ctrlKey && e.key === 'k') {
                 e.preventDefault();
-                setShowSiteSwitcher(prev => !prev);
+                setShowSiteSwitcher(!showSiteSwitcher);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [showSiteSwitcher, setShowSiteSwitcher]);
 
     // ADD: Browser history management to handle back/forward buttons.
     const navigate = useCallback((view: View, replace = false) => {
         setCurrentView(view);
         const method = replace ? 'replaceState' : 'pushState';
         window.history[method]({ view }, '', `#${view}`);
-    }, []);
+    }, [setCurrentView]);
 
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
@@ -154,7 +143,7 @@ const App: React.FC = () => {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, []);
+    }, [setCurrentView]);
 
     useEffect(() => {
         // Set initial view from URL hash on load
@@ -165,60 +154,8 @@ const App: React.FC = () => {
              navigate('dashboard', true);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-
-    const handleLogin = async (data: { token: string; email: string; isAdmin: boolean; settings: AppSettings, sites?: SiteData[], displayName?: string, profilePictureUrl?: string | null, isNewUser?: boolean }) => {
-        setSecureItem('authToken', data.token);
-        setSecureItem('userEmail', data.email);
-        setSecureItem('isAdmin', data.isAdmin);
-        setSecureItem('appSettings', data.settings);
-        setSecureItem('displayName', data.displayName || '');
-        setSecureItem('profilePictureUrl', data.profilePictureUrl || null);
-
-        setIsAdmin(data.isAdmin);
-        setIsLoggedIn(true);
-        setDisplayName(data.displayName || '');
-        setProfilePictureUrl(data.profilePictureUrl || null);
-        
-        const siteList = data.sites || [];
-        setSites(siteList);
-        setSecureItem('sites', siteList);
-
-        if (siteList.length > 0) {
-            const lastUsedSiteId = getSecureItem<number>('lastUsedSiteId');
-            const siteToSet = siteList.find(s => s.id === lastUsedSiteId) || siteList[0];
-            setCurrentSite(siteToSet);
-        } else {
-            setCurrentSite(null);
-        }
-        
-        // ADD: Trigger the welcome wizard for new users.
-        const hasSeenWizard = getSecureItem<boolean>('hasSeenWelcomeWizard');
-        if (data.isNewUser && !hasSeenWizard) {
-            setShowWelcomeWizard(true);
-        }
-    };
-
-    const handleLogout = () => {
-        removeSecureItem('authToken');
-        removeSecureItem('userEmail');
-        removeSecureItem('isAdmin');
-        removeSecureItem('sites');
-        removeSecureItem('lastUsedSiteId');
-        removeSecureItem('displayName');
-        removeSecureItem('profilePictureUrl');
-        
-        setIsLoggedIn(false);
-        setSites([]);
-        setCurrentSite(null);
-        setDisplayName('');
-        setProfilePictureUrl(null);
-        navigate('dashboard');
-        setAuthView('login');
-        setCurrentAppView('landing');
-    };
-
+    }, []); // Empty dependency array means this runs once on mount
+    
     const loadSites = useCallback(async () => {
         try {
             const data = await getAllSites();
@@ -243,7 +180,7 @@ const App: React.FC = () => {
                 }
             }
         }
-    }, [currentSite]);
+    }, [currentSite, setSites, setCurrentSite]);
 
     const handleUpdateConnector = useCallback(async () => {
         if (!currentSite) return;
@@ -263,7 +200,7 @@ const App: React.FC = () => {
             setIsUpdating(false);
             setTimeout(() => setUpdateStatus(''), 5000);
         }
-    }, [currentSite]);
+    }, [currentSite, setIsUpdating, setUpdateStatus, setConnectorVersion, setToast]);
 
     // Effect to check connector version
     useEffect(() => {
@@ -297,24 +234,22 @@ const App: React.FC = () => {
             }
         };
         checkVersions();
-    }, [currentSite, handleUpdateConnector]);
+    }, [currentSite, handleUpdateConnector, setConnectorVersion, setLatestConnectorVersion, setIsCheckingVersions, setUpdateStatus]);
 
     useEffect(() => {
         const initializeApp = async () => {
             await loadInitialConfig();
             await checkBackendStatus();
-            const token = getSecureItem('authToken');
-            if (token) {
-              setCurrentAppView('main_app');
-              setIsLoggedIn(true);
-              setIsAdmin(!!getSecureItem<boolean>('isAdmin'));
-              setDisplayName(getSecureItem('displayName') || '');
-              setProfilePictureUrl(getSecureItem('profilePictureUrl'));
-              loadSites();
+            // Load auth data from store which in turn loads from secureLocalStorage
+            loadAuthDataFromStorage();
+            // The rest of the login state is now managed by handleLogin within the store
+            // We just need to set the initial app view based on whether user is logged in
+            if (getSecureItem('authToken')) { // Check if token exists
+                setCurrentAppView('main_app');
             }
         };
         initializeApp();
-    }, [loadInitialConfig, checkBackendStatus, loadSites]);
+    }, [loadInitialConfig, checkBackendStatus, loadAuthDataFromStorage, setCurrentAppView]);
 
     const handleSiteAdded = (newSite: SiteData) => {
         const newSites = [...sites, newSite];
@@ -383,8 +318,7 @@ const App: React.FC = () => {
     };
     
     const handleProfileUpdate = () => {
-        setDisplayName(getSecureItem('displayName') || '');
-        setProfilePictureUrl(getSecureItem('profilePictureUrl'));
+        updateProfileData(getSecureItem('displayName') || '', getSecureItem('profilePictureUrl'));
     };
     
     const handleCloseWizard = () => {
@@ -466,14 +400,14 @@ const App: React.FC = () => {
     if (!isLoggedIn) {
         switch (authView) {
             case 'signup':
-                return <SignUp onBackToLogin={() => setAuthView('login')} onNavigateToVerification={handleNavigateToVerification} onLogin={handleLogin} onGoToLanding={handleGoToLanding} />;
+                return <SignUp onBackToLogin={() => setAuthView('login')} onNavigateToVerification={handleNavigateToVerification} onLogin={(data) => handleLogin(data)} onGoToLanding={handleGoToLanding} />;
             case 'verify':
                 return <Verification email={verificationEmail} onVerificationSuccess={() => setAuthView('login')} onBackToLogin={() => setAuthView('login')} onGoToLanding={handleGoToLanding} />;
             case 'forgot_password':
                 return <ForgotPassword onBackToLogin={() => setAuthView('login')} onGoToLanding={handleGoToLanding} />;
             case 'login':
             default:
-                return <Login onLogin={handleLogin} onNavigateToSignUp={() => setAuthView('signup')} onNavigateToForgotPassword={() => setAuthView('forgot_password')} onNavigateToVerification={handleNavigateToVerification} onGoToLanding={handleGoToLanding} />;
+                return <Login onLogin={(data) => handleLogin(data)} onNavigateToSignUp={() => setAuthView('signup')} onNavigateToForgotPassword={() => setAuthView('forgot_password')} onNavigateToVerification={handleNavigateToVerification} onGoToLanding={handleGoToLanding} />;
         }
     }
     
