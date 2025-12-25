@@ -1,69 +1,81 @@
-# Dev-Console: AI-Powered WordPress Management Suite
+# Dev-Console_APP
 
-**Live Demo:** [dev.ponsrischool.in](https://dev.ponsrischool.in) | **GitHub Repository:** [https://github.com/Preet3627/Dev-Console_APP](https://github.com/Preet3627/Dev-Console_APP)
+A development console application designed to streamline various development tasks.
 
-Dev-Console is an advanced, AI-powered suite that streamlines how you build, debug, and manage WordPress sites. It combines a powerful AI assistant with a comprehensive set of development tools to help you go from concept to deployment faster than ever before.
+## Features
 
-## ✨ Features
+- **Code Editor:** Integrated code editor for quick edits.
+- **File Manager:** Browse and manage project files.
+- **Backend Status Viewer:** Monitor the status of your backend services.
+- **Plugin System:** Extend functionality with custom plugins.
+- **Generators:** Generate boilerplate code or project structures.
+- **Security Scanner:** Basic security scanning capabilities.
+- **SEO Manager:** Tools for managing and optimizing SEO.
+- **Performance Optimizer:** Utilities to improve application performance.
 
-- **AI Co-Pilot:** An intelligent assistant that can generate code, manage your site, troubleshoot errors, and execute complex tasks using natural language.
-- **Multi-Provider AI Support:** Switch between different AI providers, including Google Gemini, OpenAI, Claude, Groq, Perplexity, and even a local LLM.
-- **Progressive Web App (PWA):** The application is a fully offline-capable PWA, allowing you to use it even without an internet connection.
-- **Enhanced Code Editor:** A polished code editor with syntax highlighting, file history, and a more robust layout.
-- **On-Device AI (Autocomplete):** The Co-Pilot chat now features a basic on-device autocomplete for common commands, accessible with the Tab key.
-- **Secure & Multi-User:** Built with security in mind, featuring JWT authentication, Google Sign-In, and an admin panel for user management.
-- **Unified Management:** A single, elegant dashboard to manage plugins, themes, and core files.
-- **Safe Database Interaction:** Browse database tables and use the AI assistant to query data with safe, pre-defined commands.
-- **Diagnostics & Optimization:** Run Google PageSpeed audits, scan for security vulnerabilities, and get AI analysis on your debug logs.
+## Getting Started
 
-## 🚀 Getting Started
+These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v16 or higher)
-- [npm](https://www.npmjs.com/)
-- A MySQL-compatible database
+What things you need to install the software and how to install them:
+
+*   Node.js (LTS version recommended)
+*   Yarn or npm
 
 ### Installation
 
+A step by step series of examples that tell you how to get a development environment running.
+
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/Preet3627/Dev-Console_APP.git
+    git clone https://github.com/your-username/Dev-Console_APP.git
     cd Dev-Console_APP
     ```
 
 2.  **Install dependencies:**
     ```bash
-    npm install
+    yarn install
+    # or npm install
     ```
 
-3.  **Set up environment variables:**
-    - Create a `.env` file in the root of the project by copying `.env.example`.
-    - Fill in the required environment variables, especially for your database and JWT secret.
-
-4.  **Run the application:**
+3.  **Run the application in development mode:**
     ```bash
-    npm run dev
+    yarn dev
+    # or npm run dev
     ```
-    This will start the Vite frontend and the Node.js backend concurrently. You can access the application at `http://localhost:5173`.
+    This will start the development server, usually accessible at `http://localhost:3000`.
 
-## 🖥️ Desktop Application (Tauri)
+## Building for Production
 
-The project is set up to be packaged as a cross-platform desktop application using Tauri.
-
-**Note:** The build process for the desktop application is currently blocked because it requires the Rust toolchain (including `cargo`) to be installed on your system.
-
-Once you have installed Rust from [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install), you can build the application with:
+To build the application for production:
 
 ```bash
-npx tauri build
+yarn build
+# or npm run build
 ```
 
-This will generate executables for your platform in the `src-tauri/target/release` directory.
+This will generate the production-ready files in the `dist` directory.
 
-## 🤝 Contributing
+## Technologies Used
 
-This is an open-source project. Contributions are welcome! Please feel free to open an issue or submit a pull request on the [GitHub repository](https://github.com/Preet3627/Dev-Console_APP).
+*   **React:** Frontend library
+*   **Vite:** Build tool
+*   **Tailwind CSS:** For styling
+*   **TypeScript:** For type-safe JavaScript
+*   **Tauri:** For desktop application bundling (if applicable)
 
----
-*This README was generated by an AI assistant.*
+## Contributing
+
+Please read `CONTRIBUTING.md` for details on our code of conduct, and the process for submitting pull requests to us.
+
+## License
+
+This project is licensed under the MIT License - see the `LICENSE` file for details.
+
+## Acknowledgments
+
+*   Hat tip to anyone whose code was used
+*   Inspiration
+*   etc.
