@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getSecureItem, setSecureItem, removeSecureItem } from './utils/secureLocalStorage';
+import { getSecureItem, setSecureItem, removeSecureItem } from '../utils/secureLocalStorage';
 import { AppStatus, SiteData, AppSettings, View, AuthView } from '../types';
 
 // Define the shape of our store's state
