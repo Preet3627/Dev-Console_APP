@@ -1,5 +1,5 @@
 # Dev-Console
-
+If You dont want to setup From scratch Here is THE ONline Solution https://dev.ponsrischool.in
 An advanced local WordPress management system that uses AI to generate, edit, and troubleshoot plugins and themes, and syncs changes directly to a live WordPress site via a connector plugin.
 
 ## ✨ Features
